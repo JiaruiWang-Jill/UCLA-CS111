@@ -121,8 +121,11 @@ int main(int argc, char *argv[]) {
   if (in_fd == -1) {
     fprintf(stderr, "Failed to open the input file.\n");
     switch (errno) {
+    case EEXIST:
+      fprintf(stderr, "The specified file does not exist.\n");
+      break;
     case EACCES:
-      fprintf(stderr, "Do not have permission to create or write the file.\n");
+      fprintf(stderr, "Do not have permission to read the file.\n");
       break;
     default:
       fprintf(stderr, "An error occurred. Errno: %d\n", errno);
