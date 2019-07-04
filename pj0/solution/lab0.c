@@ -12,7 +12,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <limits.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -23,6 +22,14 @@
 #define PROGRAM_NAME "lab0"
 
 #define AUTHORS proper_name("Qingwei Zeng")
+
+/* For long options that have no equivalent short option, use a
+  non-character as a pseudo short option, starting with CHAR_MAX + 1.
+  Here, we use CHAR_MAX = 255 */
+#define INPUT_SHORT_OPTION 256
+#define OUTPUT_SHORT_OPTION 257
+#define SEGFAULT_SHORT_OPTION 258
+#define CATCH_SHORT_OPTION 259
 
 char *const program_name = PROGRAM_NAME;
 
@@ -74,13 +81,6 @@ int main(int argc, char *argv[]) {
 
   mode_t creat_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
-  /* For long options that have no equivalent short option, use a
-    non-character as a pseudo short option, starting with CHAR_MAX + 1. */
-  int const INPUT_SHORT_OPTION = CHAR_MAX + 1;
-  int const OUTPUT_SHORT_OPTION = CHAR_MAX + 2;
-  int const SEGFAULT_SHORT_OPTION = CHAR_MAX + 3;
-  int const CATCH_SHORT_OPTION = CHAR_MAX + 4;
-
   /* options flag */
   bool segfault_set = false;
 
@@ -95,21 +95,27 @@ int main(int argc, char *argv[]) {
 
   /* option parsing */
   while ((optc = getopt_long(argc, argv, ":", long_opts, NULL)) != -1) {
-    if (optc == INPUT_SHORT_OPTION)
+    switch (optc) {
+    case INPUT_SHORT_OPTION:
       /* ignore potential open error here on purpose,
         since --segfault has a higher priority */
       in_fd = open(optarg, O_RDONLY);
-    else if (optc == OUTPUT_SHORT_OPTION)
+      break;
+    case OUTPUT_SHORT_OPTION:
       /* ignore potential creat error here on purpose,
         since --segfault has a higher priority */
       out_fd = open(optarg, O_CREAT | O_TRUNC | O_WRONLY, creat_mode);
-    else if (optc == SEGFAULT_SHORT_OPTION)
+      break;
+    case SEGFAULT_SHORT_OPTION:
       segfault_set = true;
-    else if (optc == CATCH_SHORT_OPTION)
+      break;
+    case CATCH_SHORT_OPTION:
       /* register a segfault handler */
       signal(SIGSEGV, segfault_handler);
-    else
+      break;
+    default:
       usage(EXIT_FAILURE);
+    }
   }
 
   /* force a segmentation fault, if --segfault is set */

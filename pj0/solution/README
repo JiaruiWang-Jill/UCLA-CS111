@@ -1,1 +1,21 @@
-# I choose to check ... in my smoke test
+NAME:   Qingwei Zeng
+EMAIL:  zenn@ucla.edu
+ID:     005181694
+
+The program 'pj0' includes the following files:
+ - Makefile
+ - README
+ - lab0.c
+
+The program takes the source code of shuf from GNU coreutils by Paul Eggerts
+as a reference. Thank you, Paul.
+
+The `make check` command performs a wide variety of tests, including:
+ - writing to an output file that does not have read access
+ - reading from an input file that does not have read access
+ - reading from an input file that does not exist
+ - having an invalid argument
+ - reading from stdin and writing to stdout
+ - reading from an input file and writing to stdout
+ - reading from stdin and writing to an output file
+ - reading from an input file and writing to an output file
