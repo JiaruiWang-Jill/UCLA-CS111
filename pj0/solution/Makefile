@@ -13,7 +13,7 @@ check: build $(TESTS)
 	@echo "Completed all tests."
 
 clean:
-	rm -rf lab0 *.o
+	rm -rf lab0 *.o *.tar.gz
 
 dist: build
 	@tar -zcf lab0-005181694.tar.gz lab0.c Makefile README backtrace.png breakpoint.png

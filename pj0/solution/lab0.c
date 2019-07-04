@@ -34,7 +34,7 @@
 char *const program_name = PROGRAM_NAME;
 
 void usage(int status) {
-  printf("\n\
+  fprintf(stderr, "\n\
 Usage: %s --input=FILE\n\
        %s --output=FILE\n\
        %s --segfault\n\
@@ -46,19 +46,19 @@ Usage: %s --input=FILE\n\
 Pipe a designated input into a designated output.\n\
 \n\
 ",
-        stdout);
+        stderr);
   fputs("\
 --input=FILE          use the specified file as input\n\
 --output=FILE         create the specified file and use it as output\n\
 --segfault            force a segmentation fault\n\
 --catch               catch segmentation faults\n\
 ",
-        stdout);
+        stderr);
   fputs("\
 \n\
 With no --input (--output) option, it reads (writes) standard input (output).\n\
 ",
-        stdout);
+        stderr);
   exit(status);
 }
 
@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "Do not have permission to read the file.\n");
       break;
     default:
-      fprintf(stderr, "An error occurred. Errno: %d\n", errno);
+      fprintf(stderr, "An error occurred. %s\n", strerror(errno));
     }
     exit(2);
   }
@@ -150,7 +150,7 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "Insufficient disk quota.\n");
       break;
     default:
-      fprintf(stderr, "An error occurred. Errno: %d\n", errno);
+      fprintf(stderr, "An error occurred. %s\n", strerror(errno));
     }
     exit(3);
   }
