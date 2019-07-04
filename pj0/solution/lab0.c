@@ -79,10 +79,7 @@ int main(int argc, char *argv[]) {
   int const CATCH_SHORT_OPTION = CHAR_MAX + 4;
 
   /* options flag */
-  bool input_option_set = false;
-  bool output_option_set = false;
-  bool segfault_option_set = false;
-  bool catch_option_set = false;
+  bool segfault_set = false;
 
   /* options descriptor */
   static struct option const long_opts[] = {
@@ -93,37 +90,27 @@ int main(int argc, char *argv[]) {
 
   /* option parsing */
   while ((optc = getopt_long(argc, argv, "io:", long_opts, NULL)) != -1) {
-    switch (optc) {
-    case INPUT_SHORT_OPTION:
-      in_fd = open(optarg, O_RDONLY);
+    if (optc == INPUT_SHORT_OPTION)
       /* ignore potential open error here on purpose,
         since --segfault has a higher priority */
-      input_option_set = true;
-      break;
-    case OUTPUT_SHORT_OPTION:
-      out_fd =  open(optarg, O_CREAT | O_TRUNC | O_WRONLY, creat_mode);
+      in_fd = open(optarg, O_RDONLY);
+    else if (optc == OUTPUT_SHORT_OPTION)
       /* ignore potential creat error here on purpose,
         since --segfault has a higher priority */
-      output_option_set = true;
-      break;
-    case SEGFAULT_SHORT_OPTION:
-      segfault_option_set = true;
-      break;
-    case CATCH_SHORT_OPTION:
-      catch_option_set = true;
+      out_fd = open(optarg, O_CREAT | O_TRUNC | O_WRONLY, creat_mode);
+    else if (optc == SEGFAULT_SHORT_OPTION)
+      segfault_set = true;
+    else if (optc == CATCH_SHORT_OPTION)
       /* register a segfault handler */
       signal(SIGSEGV, segfault_handler);
-      break;
-    default:
+    else
       usage(EXIT_FAILURE);
-    }
   }
 
   /* force a segmentation fault, if --segfault is set */
-  if (segfault_option_set) {
+  if (segfault_set)
     /* force a segmentation fault */
     segfault();
-  }
 
   /* handle open error caused by --input option, if any */
   if (in_fd == -1) {
