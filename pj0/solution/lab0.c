@@ -56,9 +56,9 @@ With no --input (--output) option, it reads (writes) standard input (output).\n\
 }
 
 /* Forces a segmentation fault by memcpying to NULL destination */
-void segfault() { 
+void segfault() {
   char * null_dest = NULL;
-  memcpy(program_name, null_dest , 10); 
+  memcpy(program_name, null_dest , 10);
 }
 
 void segfault_handler() {
@@ -89,10 +89,12 @@ int main(int argc, char *argv[]) {
       {"input", required_argument, NULL, INPUT_SHORT_OPTION},
       {"output", required_argument, NULL, OUTPUT_SHORT_OPTION},
       {"segfault", no_argument, NULL, SEGFAULT_SHORT_OPTION},
-      {"catch", no_argument, NULL, CATCH_SHORT_OPTION}};
+      {"catch", no_argument, NULL, CATCH_SHORT_OPTION},
+      {0, 0, 0, 0},
+  };
 
   /* option parsing */
-  while ((optc = getopt_long(argc, argv, "io:", long_opts, NULL)) != -1) {
+  while ((optc = getopt_long(argc, argv, ":", long_opts, NULL)) != -1) {
     if (optc == INPUT_SHORT_OPTION)
       /* ignore potential open error here on purpose,
         since --segfault has a higher priority */
