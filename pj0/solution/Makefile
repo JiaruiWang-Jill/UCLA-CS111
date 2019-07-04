@@ -5,18 +5,11 @@ CFLAGS=-Wall -Wextra
 
 all: lab0
 
-check:
-	# correct case with no params.
-	# return code 0.
-	# correct case with specified input. return code 0.
-	# correct case with specified output. return code 0.
-	# correct case with specified intput and output. return code 0.
-
-	# error case with unrecognized argument.
-	# print out error message, usage line. return code 1.
-
-	# error case with with inaccessible specified input. return code 2
-	# error case with with non-existant specified output. return code 3
+check: lab0
+	./lab0 --input lab0.c --output no_perm 2> stderr; \
+	if [[ $$? -ne 3 ]]; then \
+		echo "FAILED: Should exit with status 3 when unable to open output file"; \
+	fi
 
 clean:
 	rm -rf lab0 *.o
@@ -24,8 +17,5 @@ clean:
 dist: lab0
 	tar -zcvf lab0.tar.gz lab0
 
-lab0: lab0.o
-	$(CC) $(CFLAGS) lab0.o -o lab0
-
-lab0.o: lab0.c
-	$(CC) $(CFLAGS) -c lab0.c -o lab0.o
+lab0: lab0.c
+	$(CC) $(CFLAGS) lab0.c -o lab0
