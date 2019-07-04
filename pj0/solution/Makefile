@@ -16,7 +16,7 @@ clean:
 	rm -rf lab0 *.o
 
 dist: build
-	tar -zcvf lab0-005181694.tar.gz lab0.c Makefile README
+	@tar -zcf lab0-005181694.tar.gz lab0.c Makefile README backtrace.png breakpoint.png
 
 lab0: lab0.c
 	$(CC) $(CFLAGS) lab0.c -o lab0
