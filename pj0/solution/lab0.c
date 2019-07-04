@@ -56,7 +56,10 @@ With no --input (--output) option, it reads (writes) standard input (output).\n\
 }
 
 /* Forces a segmentation fault by memcpying to NULL destination */
-void segfault() { memcpy(program_name, NULL, 10); }
+void segfault() { 
+  char * null_dest = NULL;
+  memcpy(program_name, null_dest , 10); 
+}
 
 void segfault_handler() {
   fprintf(stderr, "Segmentation fault was generated and caught.\n");
