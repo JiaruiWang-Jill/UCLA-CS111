@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -91,51 +93,89 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  int proc_id = -2;
+  int proc_id;
 
   if (shell_set) proc_id = fork();
-  // TODO: check errno
-
-  int pipe_fd[2] = {STDIN_FILENO, STDOUT_FILENO};
-  int *in_fd = &pipe_fd[0];
-  int *out_fd = &pipe_fd[1];
-
-  if (proc_id > 0) {
-    // successfully created a child process, create pipe
-    if (pipe(pipe_fd)) {
-      // TODO: check errno
-    }
+  if (proc_id == -1) {
+    // TODO: check errno
+    // TODO: exit
   }
 
-  if (proc_id != 0) {
+  // fork was successful, create pipes
+
+  int ttos_fd[2];  // terminal-to-shell pipe
+  int *to_s_fd = &ttos_fd[0];
+  int *from_t_fd = &ttos_fd[1];
+  if (pipe(ttos_fd)) {
+    // TODO: error happened! check errno
+    // TODO: exit
+  }
+
+  int stot_fd[2];  // shell-to-terminal pipe
+  int *to_t_fd = &stot_fd[0];
+  int *from_s_fd = &stot_fd[1];
+  if (pipe(stot_fd)) {
+    // TODO: error happened! check errno
+    // TODO: exit
+  }
+
+  const bool is_parent = (proc_id > 0);
+  const bool is_child = (proc_id == 0);
+
+  /* parent (terminal) process */
+  if (is_parent) {
+    // close unused end of pipes
+    close(*from_t_fd);  // no need to read from itself
+    close(*to_t_fd);    // not need to write to itself
+
     char buf[BUF_SIZE];
     char c;
-    // parent process
     while (true) {
+      // handle keyboard input
       read(STDIN_FILENO, buf, sizeof(buf));
+
       // TODO: check errno
       for (int i = 0; i < BUF_SIZE; i++) {
         c = buf[i];
         if (c == EOT) {
-          write(*in_fd, EOT_REPR, sizeof(EOT_REPR));
+          write(*to_s_fd, EOT_REPR, sizeof(EOT_REPR));
           // TODO: check errno
-          tcsetattr(*out_fd, TCSANOW, &orig_termios_p);
+          tcsetattr(*to_s_fd, TCSANOW, &orig_termios_p);
           exit(EXIT_SUCCESS);
         }
         // restore terminal, exit.
         else if (c == '\r' || c == '\n')
-          write(*out_fd, CRLF, sizeof(CRLF));
+          write(*to_s_fd, CRLF, sizeof(CRLF));
         else
-          write(1, &c, sizeof(char));
+          // write to shell, if a shell is specified; otherwise, write to stdout
+          write(*to_s_fd, &c, sizeof(char));
       }
+
+      // handle shell-to-terminal pipe
+      read(*from_s_fd, buf, sizeof(buf));
+      /* handle “\n”, forward to stdout */
     }
-  } else {
-    // child process
-    close(to_shell[1]);
-    close(0);
-    dup(to_shell[0]);
-    close(to_shell[0]);
-    execlp(“lab0”, “lab0”, NULL);
+    /* int status = 0; */
+    /* waitpid(proc_id, &status, 0); */
+    /* printf("Child process exits with code : % d\n", (status & 0xff)); */
+  }
+
+  /* child (shell) process */
+  if (is_child) {
+    // close unused end of pipes
+    close(*from_s_fd);  // no need to read from itself
+    close(*to_s_fd);    // no need to write to itself
+
+    // redirect the output of terminal-to-shell pipe to stdin
+    close(STDIN_FILENO);
+    dup(*from_t_fd);
+    // redirect stdout and stderr to the input of shell-to-terminal pipe
+    close(STDERR_FILENO);
+    dup(*to_t_fd);
+    close(STDOUT_FILENO);
+    dup(*to_t_fd);
+
+    execlp(shell_program, shell_program, NULL);
   }
 
   return 0;
