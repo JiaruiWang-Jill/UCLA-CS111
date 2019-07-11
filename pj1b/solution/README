@@ -1,0 +1,15 @@
+NAME: Qingwei Zeng
+EMAIL: zenn@ucla.edu
+ID: 005181694
+SLIPDAYS: 0
+
+The program 'pj1b' includes the following files:
+ - Makefile
+ - README
+ - lab1a.c
+
+This program contains a --debug option, which provides insight to how things
+works and helps the process of testing.
+
+the system handling was done through _c function.
+

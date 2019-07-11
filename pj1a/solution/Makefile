@@ -1,9 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -Wextra
-GANG=0
 
 .PHONY: build check clean dist
-.PHONY: $(TESTS)
 
 build: lab1a
 

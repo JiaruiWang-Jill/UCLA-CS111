@@ -1,0 +1,45 @@
+NAME: Qingwei Zeng
+EMAIL: zenn@ucla.edu
+ID: 005181694
+SLIPDAYS: 1
+
+The program 'pj1a' includes the following files:
+ - Makefile
+ - README
+ - lab1a.c
+
+This program contains a --debug option, which provides insight to how things
+works and helps the process of testing.
+
+the system handling was done through _c function.
+
+---
+
+The reason I submitted late is because I was mislead by this piazza post:
+https://piazza.com/class/jxe8f0mifm5ef?cid=42
+Looking back now I understand Diyu meant that the "--shell" option must be given
+an option, not that the option itself is required. Hence I exited with failure
+when the option is not provided.
+
+The most frustrating thing is that the sanity test mislead me into thinking
+there is some other problems. I keep getting the following test results:
+
+... confiriming disable of ICANON
+... ICANON still on (0x8a3b)
+... confirming disable of ECHO
+... ICANON still on (0x8a3b)
+...
+... confirming character at a time echo
+FAIL ... STDERR dump follows:
+EXPECTATION NOT FULFILLED
+... confirming batch character echo and processing
+FAIL ... STDERR dump follows:
+EXPECTATION NOT FULFILLED
+
+The first test failure are totally irrelavent. I spent a day looking at how come
+the termios flags are not properly set, and it was desperating.
+
+I hope this is a good enough reason to give me a slip day.
+
+I worked very hard.
+
