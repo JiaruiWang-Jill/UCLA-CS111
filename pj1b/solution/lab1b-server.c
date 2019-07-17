@@ -6,7 +6,9 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
+#include <mcrypt.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -45,6 +47,57 @@ char const INTERRUPT_REPR[] = "^C";
 char const CRLF[] = "\r\n";
 char const LF = '\n';
 
+bool port_set = false, encrypt_set = true, debug = false;
+
+int sockfd;
+
+/* syscall check function
+ * checks the return value of a syscall and prints error message to stderr */
+void _c(int ret, char *errmsg);
+
+MCRYPT session;
+
+MCRYPT init_mcrypt_session(char *key_pathname) {
+  char keybuf[256];
+  int keyfd, keylen;
+  _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
+  // read key from the specified file into key_buf
+  _c(keylen = read(keyfd, keybuf, 256), "Failed to read from key file");
+  _c(close(keyfd), "Failed to close key file");
+  session = mcrypt_module_open("twofish", NULL, "cfb", NULL);
+  char *iv = malloc(mcrypt_enc_get_iv_size(session));
+  memset(iv, 0, mcrypt_enc_get_iv_size(session));
+  mcrypt_generic_init(session, keybuf, keylen, iv);
+  return session;
+}
+
+void close_mcrypt_session(MCRYPT session) {
+  mcrypt_generic_deinit(session);
+  mcrypt_module_close(session);
+}
+
+int read_socket(int sockfd, void *buf, size_t size) {
+  char buf_decrypted[256];
+  int count;
+  _c(count = read(sockfd, buf, size),
+     "Failed to read from server socket buffer");
+  memcpy(buf_decrypted, buf, size);
+  if (encrypt_set) mdecrypt_generic(session, buf_decrypted, size);
+  return count;
+}
+
+void write_socket(int sockfd, void const *buf, size_t size) {
+  char buf_encrypted[256];
+  memcpy(buf_encrypted, buf, size);
+  if (encrypt_set) mcrypt_generic(session, buf_encrypted, size);
+  _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
+}
+
+void exit_cleanup() {
+  close_mcrypt_session(session);
+  _c(close(sockfd), "Failed to close socket");
+};
+
 void usage();
 
 struct termios orig_termios_attr;
@@ -52,10 +105,6 @@ struct termios orig_termios_attr;
 void sigpipe_handler(int sig);
 
 int serve(unsigned int portno);
-
-/* syscall check function
- * checks the return value of a syscall and prints error message to stderr */
-void _c(int ret, char *errmsg);
 
 int main(int argc, char *argv[]) {
   /* options descriptor */
@@ -66,10 +115,8 @@ int main(int argc, char *argv[]) {
       {0, 0, 0, 0},
   };
 
-  bool port_set = false, debug = false;
-
   unsigned int portno;
-  char encrypt_filename[256];
+  char key_pathname[256];
 
   /* option parsing */
   int optc;
@@ -84,7 +131,8 @@ int main(int argc, char *argv[]) {
         debug = true;
         break;
       case ENCRYPT_SHORT_OPTION:
-        strcpy(encrypt_filename, optarg);
+        encrypt_set = true;
+        strcpy(key_pathname, optarg);
         break;
       default:
         fputs("Invalid arguments.\r\n", stderr);
@@ -97,9 +145,11 @@ int main(int argc, char *argv[]) {
     usage();
   }
 
-  int sockfd;
+  if (encrypt_set) init_mcrypt_session(key_pathname);
 
   sockfd = serve(portno);
+
+  atexit(exit_cleanup);
 
   char buf[BUF_SIZE];
   int count;
@@ -140,7 +190,7 @@ int main(int argc, char *argv[]) {
       _c(poll(pollfds, 2, -1), "Failed to poll stdin and from_shellhell");
       if (pollfds[0].revents & POLLIN) {
         // handle socket input
-        _c(count = read(sockfd, buf, sizeof(buf)), "Failed to read from stdin");
+        read_socket(sockfd, buf, sizeof(buf));
 
         for (int i = 0; i < count; i++) switch (buf[i]) {
             case EOT:
@@ -180,23 +230,17 @@ int main(int argc, char *argv[]) {
            "Failed to read from shell-to-terminal pipe");
         for (int i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
-              if (debug)
-                _c(send(sockfd, CRLF, sizeof(CRLF), 0),
-                   "Failed to write to stdout");
+              write_socket(sockfd, CRLF, sizeof(CRLF));
               break;
             case EOT:
-              if (debug)
-                _c(send(sockfd, &buf[i], sizeof(char), 0),
-                   "Failed to write to stdout");
+              write_socket(sockfd, &buf[i], sizeof(char));
               _c(close(*from_shell_fd),
                  "Failed to close the read end of shell-to-terminal pipe");
               close(sockfd);
               exit(EXIT_SUCCESS);
               break;
             default:
-              if (debug)
-                _c(send(sockfd, &buf[i], sizeof(char), 0),
-                   "Failed to write to stdout");
+              write_socket(sockfd, &buf[i], sizeof(char));
           }
       }
 
@@ -303,4 +347,3 @@ void _c(int ret, char *errmsg) {
   fprintf(stderr, "%s: %s. errno %d\r\n", errmsg, strerror(errno), errno);
   exit(EXIT_FAILURE);
 }
-

@@ -70,21 +70,42 @@ void write_log(char const *buf, size_t size, bool flag) {
   _c(write(logfd, CRLF, sizeof(CRLF)), "Failed to write to log");
 }
 
-MCRYPT init_session() {
-  MCRYPT session;
-  session = mcrypt_module_open("cfb", NULL, "stream", NULL);
-  /* mcrypt_generic_init(session, ); */
+MCRYPT session;
+
+MCRYPT init_mcrypt_session(char *key_pathname) {
+  char keybuf[256];
+  int keyfd, keylen;
+  _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
+  // read key from the specified file into key_buf
+  _c(keylen = read(keyfd, keybuf, 256), "Failed to read from key file");
+  _c(close(keyfd), "Failed to close key file");
+  session = mcrypt_module_open("twofish", NULL, "cfb", NULL);
+  char *iv = malloc(mcrypt_enc_get_iv_size(session));
+  memset(iv, 0, mcrypt_enc_get_iv_size(session));
+  mcrypt_generic_init(session, keybuf, keylen, iv);
+  return session;
+}
+
+void close_mcrypt_session(MCRYPT session) {
+  mcrypt_generic_deinit(session);
+  mcrypt_module_close(session);
 }
 
 int read_socket(int sockfd, void *buf, size_t size) {
+  char buf_decrypted[256];
   int count;
   _c(count = read(sockfd, buf, size),
      "Failed to read from server socket buffer");
+  memcpy(buf_decrypted, buf, size);
+  if (encrypt_set) mdecrypt_generic(session, buf_decrypted, size);
   if (log_set) write_log(buf, sizeof(buf), LOG_RECEIVE);
   return count;
 }
 
 void write_socket(int sockfd, void const *buf, size_t size) {
+  char buf_encrypted[256];
+  memcpy(buf_encrypted, buf, size);
+  if (encrypt_set) mcrypt_generic(session, buf_encrypted, size);
   _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
   if (log_set) write_log(buf, size, LOG_SEND);
 }
@@ -115,8 +136,8 @@ int main(int argc, char *argv[]) {
 
   unsigned int portno;
   char host_name[256] = "localhost";  // default to localhost
-  char log_filename[256];
-  char key_filename[256];
+  char log_pathname[256];
+  char key_pathname[256];
 
   /* option parsing */
   int optc;
@@ -134,11 +155,11 @@ int main(int argc, char *argv[]) {
         break;
       case LOG_SHORT_OPTION:
         log_set = true;
-        strcpy(log_filename, optarg);
+        strcpy(log_pathname, optarg);
         break;
       case ENCRYPT_SHORT_OPTION:
         encrypt_set = true;
-        strcpy(key_filename, optarg);
+        strcpy(key_pathname, optarg);
         break;
       case DEBUG_SHORT_OPTION:
         // print debug info
@@ -156,9 +177,11 @@ int main(int argc, char *argv[]) {
   }
 
   if (log_set)
-    _c((logfd = open(log_filename, O_WRONLY | O_CREAT,
+    _c((logfd = open(log_pathname, O_WRONLY | O_CREAT,
                      S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH)),
        "Failed to open log file");
+
+  if (encrypt_set) init_mcrypt_session(key_pathname);
 
   tc_setup();
 
@@ -259,8 +282,9 @@ int client_connect(char *host_name, unsigned int portno) {
 }
 
 void exit_cleanup() {
-  if (log_set) _c(close(logfd), "Failed to close the log file");
   tc_reset();
+  if (log_set) _c(close(logfd), "Failed to close the log file");
+  if (encrypt_set) close_mcrypt_session(session);
 }
 
 void tc_reset() {
