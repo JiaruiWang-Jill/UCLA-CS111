@@ -12,6 +12,8 @@ clean:
 dist: build
 	@tar -zcf lab1b-005181694.tar.gz lab1b-client.c lab1b-server.c Makefile README
 
+run: lab1b
+
 lab1b: lab1b-client lab1b-server
 
 lab1b-client: lab1b-client.c

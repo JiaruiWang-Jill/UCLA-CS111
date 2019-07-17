@@ -194,6 +194,7 @@ int main(int argc, char *argv[]) {
           _c(count = read(*from_s_fd, buf, sizeof(buf)),
              "Failed to read from shell-to-terminal pipe");
           for (int i = 0; i < count; i++) {
+            c = buf[i];
             switch (c) {
               case '\n':
                 _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
