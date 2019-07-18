@@ -69,20 +69,17 @@ MCRYPT session;
 MCRYPT init_mcrypt_session(char *key_pathname);
 void close_mcrypt_session(MCRYPT session);
 
-int sockfd;
-
 ssize_t read_socket(int fd, void *buf, size_t size);
 void write_socket(int fd, void const *buf, size_t size);
 
 int child_pid;
 void wait_child();
 
+int sockfd;
 void exit_cleanup() {
   close_mcrypt_session(session);
   _c(close(sockfd), "Failed to close socket");
 };
-
-struct termios orig_termios_attr;
 
 void sigpipe_handler(int sig);
 
@@ -172,7 +169,7 @@ int main(int argc, char *argv[]) {
 
       /* process socket inputs and forward them to the shell */
       if (pollfds[0].revents & POLLIN) {
-        count = read_socket(fd, buf, sizeof(buf));
+        count = read_socket(sockfd, buf, sizeof(buf));
         if (count == 0) {
           wait_child();
           exit(EXIT_SUCCESS);
