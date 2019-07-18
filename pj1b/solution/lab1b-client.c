@@ -87,7 +87,7 @@ void sigpipe_handler(int sig) {
 }
 
 MCRYPT session;
-MCRYPT init_mcrypt_session(char *key_pathname);
+void init_mcrypt_session(char *key_pathname);
 void close_mcrypt_session(MCRYPT session);
 
 ssize_t read_socket(int sockfd, void *buf, size_t size);
@@ -289,7 +289,7 @@ void _c(int ret, char *errmsg) {
   exit(EXIT_FAILURE);
 }
 
-MCRYPT init_mcrypt_session(char *key_pathname) {
+void init_mcrypt_session(char *key_pathname) {
   char keystr[KEY_MAX_LENGTH];
   int keyfd, keylen;
   _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
@@ -298,10 +298,17 @@ MCRYPT init_mcrypt_session(char *key_pathname) {
      "Failed to read from key file");
   _c(close(keyfd), "Failed to close key file");
   session = mcrypt_module_open("twofish", NULL, "cfb", NULL);
+  if (session == MCRYPT_FAILED) fprintf(stderr, "MCRYPT session open error.\n");
   char *iv = malloc(mcrypt_enc_get_iv_size(session));
+  if (iv == NULL) {
+    fprintf(stderr, "Failed to allocate memory for MCRYPT initial vector\n");
+    exit(EXIT_FAILURE);
+  }
   memset(iv, 0, mcrypt_enc_get_iv_size(session));
-  mcrypt_generic_init(session, keystr, keylen, iv);
-  return session;
+  if (mcrypt_generic_init(session, keystr, keylen, iv) < 0) {
+    fprintf(stderr, "Failed to init MCRYPT session\n");
+    exit(EXIT_FAILURE);
+  };
 }
 
 void close_mcrypt_session(MCRYPT session) {
