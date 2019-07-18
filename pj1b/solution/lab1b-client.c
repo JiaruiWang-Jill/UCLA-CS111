@@ -264,7 +264,22 @@ void exit_cleanup() {
 }
 
 void usage() {
-  // TODO: rewrite the usage message
+  fprintf(stderr,
+          "\r\n\
+Usage: %s --port=PORTNO\r\n\
+       %s --port=PORTNO --host=HOSTNAME\r\n\
+       %s --port=PORTNO --debug\r\n\
+\r\n\
+",
+          program_name, program_name, program_name);
+  fputs(
+      "\
+--port=PORTNO       port number of which the server listens from\r\n\
+--host=HOSTNAME     host server name, defaults to 'localhost'\r\n\
+--log               file that records data sent over the socket\r\n\
+--debug             print out debug infomation of the client\r\n\
+",
+      stderr);
   exit(EXIT_FAILURE);
 }
 

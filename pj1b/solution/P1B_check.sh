@@ -342,7 +342,6 @@ else
 fi
 
 # see if the server properly reported shell exit status
-echo !!!!
 cat SVR_ERR
 grep "STATUS=7" SVR_ERR > /dev/null
 if [ $? -eq 0 ]; then

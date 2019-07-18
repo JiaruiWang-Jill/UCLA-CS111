@@ -292,7 +292,21 @@ int main(int argc, char *argv[]) {
 }
 
 void usage() {
-  // TODO: proper usage message
+  fprintf(stderr,
+          "\r\n\
+Usage: %s --port=PORTNO\r\n\
+       %s --port=PORTNO --host=HOSTNAME\r\n\
+       %s --port=PORTNO --debug\r\n\
+\r\n\
+",
+          program_name, program_name, program_name);
+  fputs(
+      "\
+--port=PORTNO       port number used to listen to the client\r\n\
+--host=HOSTNAME     host server name, defaults to 'localhost'\r\n\
+--debug             print out debug infomation of the server\r\n\
+",
+      stderr);
   exit(EXIT_FAILURE);
 }
 
