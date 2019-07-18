@@ -66,45 +66,11 @@ void debug_printf(char const *string) {
 }
 
 MCRYPT session;
+MCRYPT init_mcrypt_session(char *key_pathname);
+void close_mcrypt_session(MCRYPT session);
 
-MCRYPT init_mcrypt_session(char *key_pathname) {
-  char keystr[KEY_MAX_LENGTH];
-  int keyfd, keylen;
-  _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
-  // read key from the specified file into key_buf
-  _c(keylen = read(keyfd, keystr, KEY_MAX_LENGTH),
-     "Failed to read from key file");
-  _c(close(keyfd), "Failed to close key file");
-  session = mcrypt_module_open("twofish", NULL, "cfb", NULL);
-  char *iv = malloc(mcrypt_enc_get_iv_size(session));
-  memset(iv, 0, mcrypt_enc_get_iv_size(session));
-  mcrypt_generic_init(session, keystr, keylen, iv);
-  return session;
-}
-
-void close_mcrypt_session(MCRYPT session) {
-  mcrypt_generic_deinit(session);
-  mcrypt_module_close(session);
-}
-
-int read_socket(int sockfd, void *buf, size_t size) {
-  ssize_t count;
-  _c(count = recv(sockfd, buf, size, 0),
-     "Failed to read from server socket buffer");
-  if (encrypt_set) mdecrypt_generic(session, buf, count);
-  return count;
-}
-
-void write_socket(int sockfd, void const *buf, size_t size) {
-  if (encrypt_set) {
-    char buf_encrypted[256];
-    memcpy(buf_encrypted, buf, size);
-    mcrypt_generic(session, buf_encrypted, size);
-    _c(send(sockfd, buf_encrypted, size, 0), "Failed to send to socket buffer");
-  } else {
-    _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
-  }
-}
+int read_socket(int sockfd, void *buf, size_t size);
+void write_socket(int sockfd, void const *buf, size_t size);
 
 int child_pid;
 
@@ -374,4 +340,43 @@ void _c(int ret, char *errmsg) {
   if (ret != -1) return;  // syscall suceeded
   fprintf(stderr, "%s: %s. errno %d\r\n", errmsg, strerror(errno), errno);
   exit(EXIT_FAILURE);
+}
+
+MCRYPT init_mcrypt_session(char *key_pathname) {
+  char keystr[KEY_MAX_LENGTH];
+  int keyfd, keylen;
+  _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
+  // read key from the specified file into key_buf
+  _c(keylen = read(keyfd, keystr, KEY_MAX_LENGTH),
+     "Failed to read from key file");
+  _c(close(keyfd), "Failed to close key file");
+  session = mcrypt_module_open("twofish", NULL, "cfb", NULL);
+  char *iv = malloc(mcrypt_enc_get_iv_size(session));
+  memset(iv, 0, mcrypt_enc_get_iv_size(session));
+  mcrypt_generic_init(session, keystr, keylen, iv);
+  return session;
+}
+
+void close_mcrypt_session(MCRYPT session) {
+  mcrypt_generic_deinit(session);
+  mcrypt_module_close(session);
+}
+
+int read_socket(int sockfd, void *buf, size_t size) {
+  ssize_t count;
+  _c(count = recv(sockfd, buf, size, 0),
+     "Failed to read from server socket buffer");
+  if (encrypt_set) mdecrypt_generic(session, buf, count);
+  return count;
+}
+
+void write_socket(int sockfd, void const *buf, size_t size) {
+  if (encrypt_set) {
+    char buf_encrypted[256];
+    memcpy(buf_encrypted, buf, size);
+    mcrypt_generic(session, buf_encrypted, size);
+    _c(send(sockfd, buf_encrypted, size, 0), "Failed to send to socket buffer");
+  } else {
+    _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
+  }
 }
