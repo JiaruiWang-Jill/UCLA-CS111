@@ -199,7 +199,8 @@ int main(int argc, char *argv[]) {
 
     /* process socket outputs and forward them to stdout */
     if (pollfds[1].revents & POLLIN) {
-      if ((count = read_socket(sockfd, buf, sizeof(buf)))) exit(EXIT_SUCCESS);
+      count = read_socket(sockfd, buf, sizeof(buf));
+      if (count == 0) exit(EXIT_SUCCESS);
       for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
           case EOT:
             _c(write(STDOUT_FILENO, &buf[i], 1), "Failed to write to stdout");

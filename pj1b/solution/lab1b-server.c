@@ -169,7 +169,8 @@ int main(int argc, char *argv[]) {
 
       /* process socket inputs and forward them to the shell */
       if (pollfds[0].revents & POLLIN) {
-        if ((count = read_socket(sockfd, buf, sizeof(buf))) == 0) {
+        count = read_socket(sockfd, buf, sizeof(buf));
+        if (count == 0) {
           wait_child();
           exit(EXIT_SUCCESS);
         }
