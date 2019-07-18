@@ -62,6 +62,15 @@ char log_prefix_buf[256];
 char const LOG_SENT_PREFIX[] = "SENT %ld bytes: ";
 char const LOG_RECEIVED_PREFIX[] = "RECEIVED %ld bytes: ";
 
+void debug_write(char const *buf, int size) {
+  if (debug)
+    _c(write(STDERR_FILENO, buf, size), "Failed to write debug log to stderr");
+};
+
+void debug_printf(char const *string) {
+  if (debug) fprintf(stderr, "%s", string);
+}
+
 void write_log(char const *buf, size_t size, bool flag) {
   // flag: false for receive log, true for send log
   sprintf(log_prefix_buf, flag ? LOG_SENT_PREFIX : LOG_RECEIVED_PREFIX, size);
@@ -247,10 +256,10 @@ int main(int argc, char *argv[]) {
     }
 
     if (pollfds[0].revents & (POLLHUP | POLLERR)) {
-      if (debug && (pollfds[0].revents & POLLERR))
-        fprintf(stderr, "STDIN has poll err.\r\n");
-      if (debug && (pollfds[0].revents & POLLHUP))
-        fprintf(stderr, "STDIN has hung up.\r\n");
+      if (pollfds[0].revents & POLLERR)
+        debug_printf("stdin has poll error.\r\n");
+      if (pollfds[0].revents & POLLHUP)
+        debug_printf("stdin socket has hung up.\r\n");
       count = read_socket(sockfd, buf, sizeof(buf));
       if (count == 0) exit(EXIT_SUCCESS);
       for (int i = 0; i < count; i++) switch (buf[i]) {
@@ -266,10 +275,10 @@ int main(int argc, char *argv[]) {
     }
 
     if (pollfds[1].revents & (POLLHUP | POLLERR)) {
-      if (debug && (pollfds[1].revents & POLLERR))
-        fprintf(stderr, "from_s has poll err.\r\n");
-      if (debug && (pollfds[1].revents & POLLHUP))
-        fprintf(stderr, "from_s has hung up.\r\n");
+      if (pollfds[1].revents & POLLERR)
+        debug_printf("socket fd has poll err.\r\n");
+      if (pollfds[1].revents & POLLHUP)
+        debug_printf("socket fd has hung up.\r\n");
       exit(EXIT_SUCCESS);
     }
   }

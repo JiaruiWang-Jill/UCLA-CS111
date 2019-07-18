@@ -66,13 +66,6 @@ void debug_printf(char const *string) {
 
 MCRYPT session;
 
-void wait_child(int child_pid) {
-  int status = 0;
-  _c(waitpid(child_pid, &status, 0), "Failed to wait for child process");
-  fprintf(stderr, "SHELL EXIT SIGNAL=%d STATUS=%d\r\n", WTERMSIG(status),
-          WEXITSTATUS(status));
-}
-
 MCRYPT init_mcrypt_session(char *key_pathname) {
   char keybuf[256];
   int keyfd, keylen;
@@ -111,8 +104,18 @@ void write_socket(int sockfd, void const *buf, size_t size) {
   }
 }
 
+int child_pid;
+
+void wait_child() {
+  int status = 0;
+  _c(waitpid(child_pid, &status, 0), "Failed to wait for child process");
+  fprintf(stderr, "SHELL EXIT SIGNAL=%d STATUS=%d\r\n", WTERMSIG(status),
+          WEXITSTATUS(status));
+}
+
 void exit_cleanup() {
   close_mcrypt_session(session);
+  wait_child();
   _c(close(sockfd), "Failed to close socket");
 };
 
@@ -181,7 +184,6 @@ int main(int argc, char *argv[]) {
   int *from_shell_fd = &shell2server_fd[0], *to_server_fd = &shell2server_fd[1];
 
   /* forking */
-  int child_pid;
   _c(child_pid = fork(), "Failed to fork");
 
   bool const is_server = (child_pid > 0);
@@ -211,7 +213,6 @@ int main(int argc, char *argv[]) {
       if (pollfds[0].revents & POLLIN) {
         count = read_socket(sockfd, buf, sizeof(buf));
         if (count == 0) {
-          wait_child(child_pid);
           exit(EXIT_SUCCESS);
         }
         for (int i = 0; i < count; i++) switch (buf[i]) {
@@ -244,7 +245,6 @@ int main(int argc, char *argv[]) {
         _c(count = read(*from_shell_fd, buf, sizeof(buf)),
            "Failed to read from shell-to-terminal pipe");
         if (count == 0) {
-          wait_child(child_pid);
           exit(EXIT_SUCCESS);
         }
         for (int i = 0; i < count; i++) switch (buf[i]) {
@@ -257,7 +257,6 @@ int main(int argc, char *argv[]) {
               write_socket(sockfd, &buf[i], sizeof(char));
               _c(close(*from_shell_fd),
                  "Failed to close the read end of shell-to-terminal pipe");
-              wait_child(child_pid);
               exit(EXIT_SUCCESS);
               break;
             default:
@@ -284,7 +283,6 @@ int main(int argc, char *argv[]) {
               _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
                  "Failed to write to stdout");
           }
-        wait_child(child_pid);
         exit(EXIT_SUCCESS);
       }
 
@@ -295,7 +293,6 @@ int main(int argc, char *argv[]) {
           debug_printf("from_shell has hung up.\r\n");
         _c(close(*from_shell_fd),
            "Failed to close the read end of shell-to-terminal pipe");
-        wait_child(child_pid);
         exit(EXIT_SUCCESS);
       }
     }
