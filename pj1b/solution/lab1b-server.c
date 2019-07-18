@@ -30,6 +30,7 @@
 #define EOT 0x04        // ctrl + D, i.e. End-of-Transmission character (EOT)
 #define INTERRUPT 0x03  // ctrl + C, i.e. the interrupt character
 #define BUF_SIZE 256
+#define KEY_MAX_LENGTH 1024
 
 /* For long options that have no equivalent short option, use a
   non-character as a pseudo short option, starting with CHAR_MAX + 1.
@@ -67,16 +68,17 @@ void debug_printf(char const *string) {
 MCRYPT session;
 
 MCRYPT init_mcrypt_session(char *key_pathname) {
-  char keybuf[256];
+  char keystr[KEY_MAX_LENGTH];
   int keyfd, keylen;
   _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
   // read key from the specified file into key_buf
-  _c(keylen = read(keyfd, keybuf, 256), "Failed to read from key file");
+  _c(keylen = read(keyfd, keystr, KEY_MAX_LENGTH),
+     "Failed to read from key file");
   _c(close(keyfd), "Failed to close key file");
   session = mcrypt_module_open("twofish", NULL, "cfb", NULL);
   char *iv = malloc(mcrypt_enc_get_iv_size(session));
   memset(iv, 0, mcrypt_enc_get_iv_size(session));
-  mcrypt_generic_init(session, keybuf, keylen, iv);
+  mcrypt_generic_init(session, keystr, keylen, iv);
   return session;
 }
 
@@ -217,26 +219,24 @@ int main(int argc, char *argv[]) {
         }
         for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case EOT:
-              debug_write(EOT_REPR, sizeof(char));
+              debug_write(EOT_REPR, 1);
               _c(close(*to_shell_fd),
                  "Failed to close the write end of terminal-to-shell pipe");
               // Should cause (pollfds[1].revents & POLLHUP) to be true
               break;
             case INTERRUPT:
-              debug_write(INTERRUPT_REPR, sizeof(char));
+              debug_write(INTERRUPT_REPR, 1);
               _c(kill(child_pid, SIGINT),
                  "Failed to send kill signal to child process");
               break;
             case '\r':
             case '\n':
-              debug_write(CRLF, 2 * sizeof(char));
-              _c(write(*to_shell_fd, &LF, sizeof(char)),
-                 "Failed to write to shell");
+              debug_write(CRLF, 2);
+              _c(write(*to_shell_fd, &LF, 1), "Failed to write to shell");
               break;
             default:
-              debug_write(&buf[i], sizeof(char));
-              _c(write(*to_shell_fd, &buf[i], sizeof(char)),
-                 "Failed to write to shell");
+              debug_write(&buf[i], 1);
+              _c(write(*to_shell_fd, &buf[i], 1), "Failed to write to shell");
           }
       }
 
@@ -250,20 +250,20 @@ int main(int argc, char *argv[]) {
         }
         for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
-              debug_write(CRLF, 2 * sizeof(char));
-              write_socket(sockfd, CRLF, 2 * sizeof(char));
+              debug_write(CRLF, 2);
+              write_socket(sockfd, CRLF, 2);
               break;
             case EOT:
-              debug_write(EOT_REPR, 2 * sizeof(char));
-              write_socket(sockfd, &buf[i], sizeof(char));
+              debug_write(EOT_REPR, 2);
+              write_socket(sockfd, &buf[i], 1);
               _c(close(*from_shell_fd),
                  "Failed to close the read end of shell-to-terminal pipe");
               wait_child();
               exit(EXIT_SUCCESS);
               break;
             default:
-              debug_write(&buf[i], sizeof(char));
-              write_socket(sockfd, &buf[i], sizeof(char));
+              debug_write(&buf[i], 1);
+              write_socket(sockfd, &buf[i], 1);
           }
       }
 
@@ -276,14 +276,12 @@ int main(int argc, char *argv[]) {
            "Failed to read from shell-to-terminal pipe");
         for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
-              debug_write(CRLF, 2 * sizeof(char));
-              _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
-                 "Failed to write to stdout");
+              debug_write(CRLF, 2);
+              _c(write(STDOUT_FILENO, CRLF, 2), "Failed to write to stdout");
               break;
             default:
-              debug_write(&buf[i], sizeof(char));
-              _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
-                 "Failed to write to stdout");
+              debug_write(&buf[i], 1);
+              _c(write(STDOUT_FILENO, &buf[i], 1), "Failed to write to stdout");
           }
         wait_child();
         exit(EXIT_SUCCESS);

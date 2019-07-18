@@ -78,7 +78,7 @@ void write_log(char const *buf, size_t size, bool flag) {
   _c(write(logfd, log_prefix_buf, strlen(log_prefix_buf)),
      "Failed to write log prefix");
   _c(write(logfd, buf, size), "Failed to write encrypted cotent to log");
-  _c(write(logfd, LF, sizeof(char)), "Failed to write new line to log");
+  _c(write(logfd, LF, 1), "Failed to write new line to log");
 }
 
 void sigpipe_handler(int sig) {
@@ -230,14 +230,12 @@ int main(int argc, char *argv[]) {
       for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
           case '\r':
           case '\n':
-            _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
-               "Failed to write to stdout");
+            _c(write(STDOUT_FILENO, CRLF, 2), "Failed to write to stdout");
             write_socket(sockfd, LF, sizeof(LF));
             break;
           default:
-            _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
-               "Failed to write to stdout");
-            write_socket(sockfd, &buf[i], sizeof(char));
+            _c(write(STDOUT_FILENO, &buf[i], 1), "Failed to write to stdout");
+            write_socket(sockfd, &buf[i], 1);
         }
     }
 
@@ -247,13 +245,11 @@ int main(int argc, char *argv[]) {
       if (count == 0) exit(EXIT_SUCCESS);
       for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
           case EOT:
-            _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
-               "Failed to write to stdout");
+            _c(write(STDOUT_FILENO, &buf[i], 1), "Failed to write to stdout");
             exit(EXIT_SUCCESS);
             break;
           default:
-            _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
-               "Failed to write to stdout");
+            _c(write(STDOUT_FILENO, &buf[i], 1), "Failed to write to stdout");
         }
     }
 
@@ -266,12 +262,10 @@ int main(int argc, char *argv[]) {
       if (count == 0) exit(EXIT_SUCCESS);
       for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
           case '\n':
-            _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
-               "Failed to write to stdout");
+            _c(write(STDOUT_FILENO, CRLF, 2), "Failed to write to stdout");
             break;
           default:
-            _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
-               "Failed to write to stdout");
+            _c(write(STDOUT_FILENO, &buf[i], 1), "Failed to write to stdout");
         }
       exit(EXIT_SUCCESS);
     }
