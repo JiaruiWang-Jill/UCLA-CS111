@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <limits.h>
 #include <mcrypt.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -30,6 +31,7 @@
 #define EOT 0x04        // ctrl + D, i.e. End-of-Transmission character (EOT)
 #define INTERRUPT 0x03  // ctrl + C, i.e. the interrupt character
 #define BUF_SIZE 256
+#define KEY_MAX_LENGTH 1024
 
 #define LOG_SEND true
 #define LOG_RECEIVE false
@@ -63,8 +65,7 @@ char const LOG_SENT_PREFIX[] = "SENT %ld bytes: ";
 char const LOG_RECEIVED_PREFIX[] = "RECEIVED %ld bytes: ";
 
 void debug_write(char const *buf, int size) {
-  if (debug)
-    _c(write(STDERR_FILENO, buf, size), "Failed to write debug log to stderr");
+  if (debug) _c(write(STDERR_FILENO, buf, size), "Failed to write debug log");
 };
 
 void debug_printf(char const *string) {
@@ -88,16 +89,17 @@ void sigpipe_handler(int sig) {
 MCRYPT session;
 
 MCRYPT init_mcrypt_session(char *key_pathname) {
-  char keybuf[256];
+  char keystr[KEY_MAX_LENGTH];
   int keyfd, keylen;
   _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
   // read key from the specified file into key_buf
-  _c(keylen = read(keyfd, keybuf, 256), "Failed to read from key file");
+  _c(keylen = read(keyfd, keystr, KEY_MAX_LENGTH),
+     "Failed to read from key file");
   _c(close(keyfd), "Failed to close key file");
   session = mcrypt_module_open("twofish", NULL, "cfb", NULL);
   char *iv = malloc(mcrypt_enc_get_iv_size(session));
   memset(iv, 0, mcrypt_enc_get_iv_size(session));
-  mcrypt_generic_init(session, keybuf, keylen, iv);
+  mcrypt_generic_init(session, keystr, keylen, iv);
   return session;
 }
 
@@ -107,7 +109,7 @@ void close_mcrypt_session(MCRYPT session) {
 }
 
 int read_socket(int sockfd, void *buf, size_t size) {
-  int count;
+  ssize_t count;
   _c(count = recv(sockfd, buf, size, 0),
      "Failed to read from server socket buffer");
   if (count == 0) return 0;
@@ -207,7 +209,7 @@ int main(int argc, char *argv[]) {
   atexit(exit_cleanup);
 
   char buf[512];
-  int count;
+  ssize_t count;
 
   int sockfd = client_connect(host_name, portno);
   struct pollfd pollfds[2];
@@ -225,7 +227,7 @@ int main(int argc, char *argv[]) {
     if (pollfds[0].revents & POLLIN) {
       _c(count = read(STDIN_FILENO, buf, sizeof(buf)),
          "Failed to read from stdin");
-      for (int i = 0; i < count; i++) switch (buf[i]) {
+      for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
           case '\r':
           case '\n':
             _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
@@ -243,7 +245,7 @@ int main(int argc, char *argv[]) {
     if (pollfds[1].revents & POLLIN) {
       count = read_socket(sockfd, buf, sizeof(buf));
       if (count == 0) exit(EXIT_SUCCESS);
-      for (int i = 0; i < count; i++) switch (buf[i]) {
+      for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
           case EOT:
             _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
                "Failed to write to stdout");
@@ -262,7 +264,7 @@ int main(int argc, char *argv[]) {
         debug_printf("stdin socket has hung up.\r\n");
       count = read_socket(sockfd, buf, sizeof(buf));
       if (count == 0) exit(EXIT_SUCCESS);
-      for (int i = 0; i < count; i++) switch (buf[i]) {
+      for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
           case '\n':
             _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
                "Failed to write to stdout");

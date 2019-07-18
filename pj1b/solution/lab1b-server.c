@@ -68,13 +68,7 @@ MCRYPT session;
 
 MCRYPT init_mcrypt_session(char *key_pathname) {
   char keybuf[256];
-  char cwd[256];
   int keyfd, keylen;
-  if (getcwd(cwd, sizeof(cwd)) != NULL) {
-    fprintf(stderr, "Current working dir: %s\n", cwd);
-  } else {
-    perror("getcwd() error");
-  }
   _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
   // read key from the specified file into key_buf
   _c(keylen = read(keyfd, keybuf, 256), "Failed to read from key file");
@@ -92,7 +86,7 @@ void close_mcrypt_session(MCRYPT session) {
 }
 
 int read_socket(int sockfd, void *buf, size_t size) {
-  int count;
+  ssize_t count;
   _c(count = recv(sockfd, buf, size, 0),
      "Failed to read from server socket buffer");
   if (encrypt_set) mdecrypt_generic(session, buf, count);
@@ -210,7 +204,7 @@ int main(int argc, char *argv[]) {
     pollfds[1].fd = *from_shell_fd;
     pollfds[1].events = POLLIN + POLLHUP + POLLERR;
 
-    int count;
+    ssize_t count;
     while (true) {
       _c(poll(pollfds, 2, -1), "Failed to poll stdin and from_shell");
 
@@ -218,10 +212,10 @@ int main(int argc, char *argv[]) {
       if (pollfds[0].revents & POLLIN) {
         count = read_socket(sockfd, buf, sizeof(buf));
         if (count == 0) {
-  wait_child();
+          wait_child();
           exit(EXIT_SUCCESS);
         }
-        for (int i = 0; i < count; i++) switch (buf[i]) {
+        for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case EOT:
               debug_write(EOT_REPR, sizeof(char));
               _c(close(*to_shell_fd),
@@ -251,10 +245,10 @@ int main(int argc, char *argv[]) {
         _c(count = read(*from_shell_fd, buf, sizeof(buf)),
            "Failed to read from shell-to-terminal pipe");
         if (count == 0) {
-  wait_child();
+          wait_child();
           exit(EXIT_SUCCESS);
         }
-        for (int i = 0; i < count; i++) switch (buf[i]) {
+        for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
               debug_write(CRLF, 2 * sizeof(char));
               write_socket(sockfd, CRLF, 2 * sizeof(char));
@@ -280,7 +274,7 @@ int main(int argc, char *argv[]) {
           debug_printf("Socket has hung up.\r\n");
         _c(count = read(*from_shell_fd, buf, sizeof(buf)),
            "Failed to read from shell-to-terminal pipe");
-        for (int i = 0; i < count; i++) switch (buf[i]) {
+        for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
               debug_write(CRLF, 2 * sizeof(char));
               _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
