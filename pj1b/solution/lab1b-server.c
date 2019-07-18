@@ -50,7 +50,7 @@ char const LF = '\n';
 
 bool port_set = false, encrypt_set = false, debug = false;
 
-int sockfd;
+void usage();
 
 /* syscall check function
  * checks the return value of a syscall and prints error message to stderr */
@@ -69,24 +69,18 @@ MCRYPT session;
 MCRYPT init_mcrypt_session(char *key_pathname);
 void close_mcrypt_session(MCRYPT session);
 
-int read_socket(int sockfd, void *buf, size_t size);
-void write_socket(int sockfd, void const *buf, size_t size);
+int sockfd;
+
+ssize_t read_socket(int fd, void *buf, size_t size);
+void write_socket(int fd, void const *buf, size_t size);
 
 int child_pid;
-
-void wait_child() {
-  int status = 0;
-  _c(waitpid(child_pid, &status, 0), "Failed to wait for child process");
-  fprintf(stderr, "SHELL EXIT SIGNAL=%d STATUS=%d\r\n", WTERMSIG(status),
-          WEXITSTATUS(status));
-}
+void wait_child();
 
 void exit_cleanup() {
   close_mcrypt_session(session);
   _c(close(sockfd), "Failed to close socket");
 };
-
-void usage();
 
 struct termios orig_termios_attr;
 
@@ -178,7 +172,7 @@ int main(int argc, char *argv[]) {
 
       /* process socket inputs and forward them to the shell */
       if (pollfds[0].revents & POLLIN) {
-        count = read_socket(sockfd, buf, sizeof(buf));
+        count = read_socket(fd, buf, sizeof(buf));
         if (count == 0) {
           wait_child();
           exit(EXIT_SUCCESS);
@@ -362,21 +356,28 @@ void close_mcrypt_session(MCRYPT session) {
   mcrypt_module_close(session);
 }
 
-int read_socket(int sockfd, void *buf, size_t size) {
+ssize_t read_socket(int fd, void *buf, size_t size) {
   ssize_t count;
-  _c(count = recv(sockfd, buf, size, 0),
+  _c(count = recv(fd, buf, size, 0),
      "Failed to read from server socket buffer");
   if (encrypt_set) mdecrypt_generic(session, buf, count);
   return count;
 }
 
-void write_socket(int sockfd, void const *buf, size_t size) {
+void write_socket(int fd, void const *buf, size_t size) {
   if (encrypt_set) {
     char buf_encrypted[256];
     memcpy(buf_encrypted, buf, size);
     mcrypt_generic(session, buf_encrypted, size);
-    _c(send(sockfd, buf_encrypted, size, 0), "Failed to send to socket buffer");
+    _c(send(fd, buf_encrypted, size, 0), "Failed to send to socket buffer");
   } else {
-    _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
+    _c(send(fd, buf, size, 0), "Failed to send to socket buffer");
   }
+}
+
+void wait_child() {
+  int status = 0;
+  _c(waitpid(child_pid, &status, 0), "Failed to wait for child process");
+  fprintf(stderr, "SHELL EXIT SIGNAL=%d STATUS=%d\r\n", WTERMSIG(status),
+          WEXITSTATUS(status));
 }

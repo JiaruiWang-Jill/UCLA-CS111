@@ -90,7 +90,7 @@ MCRYPT session;
 MCRYPT init_mcrypt_session(char *key_pathname);
 void close_mcrypt_session(MCRYPT session);
 
-int read_socket(int sockfd, void *buf, size_t size);
+ssize_t read_socket(int sockfd, void *buf, size_t size);
 void write_socket(int sockfd, void const *buf, size_t size);
 
 void usage();
@@ -316,7 +316,7 @@ void close_mcrypt_session(MCRYPT session) {
   mcrypt_generic_deinit(session);
   mcrypt_module_close(session);
 }
-int read_socket(int sockfd, void *buf, size_t size) {
+ssize_t read_socket(int sockfd, void *buf, size_t size) {
   ssize_t count;
   _c(count = recv(sockfd, buf, size, 0),
      "Failed to read from server socket buffer");
