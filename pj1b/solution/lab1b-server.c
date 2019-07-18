@@ -56,12 +56,12 @@ void usage();
  * checks the return value of a syscall and prints error message to stderr */
 void _c(int ret, char *errmsg);
 
-void debug_write(char const *buf, int size) {
+void _debug_write(char const *buf, int size) {
   if (debug)
     _c(write(STDERR_FILENO, buf, size), "Failed to write debug log to stderr");
 };
 
-void debug_printf(char const *string) {
+void _debug_printf(char const *string) {
   if (debug) fprintf(stderr, "%s", string);
 }
 
@@ -153,10 +153,10 @@ int main(int argc, char *argv[]) {
 
     // no need to read from itself
     _c(close(*from_server_fd),
-       "Failed to close the read end of terminal-to-shell pipe");
+       "Failed to close the read end of server-to-shell pipe");
     // no need to write to itself
     _c(close(*to_server_fd),
-       "Failed to close the write end of shell-to-terminal pipe");
+       "Failed to close the write end of shell-to-server pipe");
 
     struct pollfd pollfds[2];
     pollfds[0].fd = sockfd;
@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
 
     ssize_t count;
     while (true) {
-      _c(poll(pollfds, 2, -1), "Failed to poll stdin and from_shell");
+      _c(poll(pollfds, 2, -1), "Failed to poll socket and from_shell");
 
       /* process socket inputs and forward them to the shell */
       if (pollfds[0].revents & POLLIN) {
@@ -177,23 +177,22 @@ int main(int argc, char *argv[]) {
         }
         for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case EOT:
-              debug_write(EOT_REPR, 1);
+              _debug_write(EOT_REPR, 1);
               _c(close(*to_shell_fd),
                  "Failed to close the write end of terminal-to-shell pipe");
-              // Should cause (pollfds[1].revents & POLLHUP) to be true
               break;
             case INTERRUPT:
-              debug_write(INTERRUPT_REPR, 1);
+              _debug_write(INTERRUPT_REPR, 1);
               _c(kill(child_pid, SIGINT),
-                 "Failed to send kill signal to child process");
+                 "Failed to send kill signal to shell");
               break;
             case '\r':
             case '\n':
-              debug_write(CRLF, 2);
+              _debug_write(CRLF, 2);
               _c(write(*to_shell_fd, &LF, 1), "Failed to write to shell");
               break;
             default:
-              debug_write(&buf[i], 1);
+              _debug_write(&buf[i], 1);
               _c(write(*to_shell_fd, &buf[i], 1), "Failed to write to shell");
           }
       }
@@ -203,16 +202,17 @@ int main(int argc, char *argv[]) {
         _c(count = read(*from_shell_fd, buf, sizeof(buf)),
            "Failed to read from shell-to-terminal pipe");
         if (count == 0) {
+          // the socket is already closed
           wait_child();
           exit(EXIT_SUCCESS);
         }
         for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
-              debug_write(CRLF, 2);
+              _debug_write(CRLF, 2);
               write_socket(sockfd, CRLF, 2);
               break;
             case EOT:
-              debug_write(EOT_REPR, 2);
+              _debug_write(EOT_REPR, 2);
               write_socket(sockfd, &buf[i], 1);
               _c(close(*from_shell_fd),
                  "Failed to close the read end of shell-to-terminal pipe");
@@ -220,25 +220,25 @@ int main(int argc, char *argv[]) {
               exit(EXIT_SUCCESS);
               break;
             default:
-              debug_write(&buf[i], 1);
+              _debug_write(&buf[i], 1);
               write_socket(sockfd, &buf[i], 1);
           }
       }
 
       if (pollfds[0].revents & (POLLHUP | POLLERR)) {
         if (pollfds[0].revents & POLLERR)
-          debug_printf("Socket has poll err.\r\n");
+          _debug_printf("Socket has poll err.\r\n");
         if (pollfds[0].revents & POLLHUP)
-          debug_printf("Socket has hung up.\r\n");
+          _debug_printf("Socket has hung up.\r\n");
         _c(count = read(*from_shell_fd, buf, sizeof(buf)),
            "Failed to read from shell-to-terminal pipe");
         for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
-              debug_write(CRLF, 2);
+              _debug_write(CRLF, 2);
               _c(write(STDOUT_FILENO, CRLF, 2), "Failed to write to stdout");
               break;
             default:
-              debug_write(&buf[i], 1);
+              _debug_write(&buf[i], 1);
               _c(write(STDOUT_FILENO, &buf[i], 1), "Failed to write to stdout");
           }
         wait_child();
@@ -247,9 +247,9 @@ int main(int argc, char *argv[]) {
 
       if (pollfds[1].revents & (POLLHUP | POLLERR)) {
         if (pollfds[1].revents & POLLERR)
-          debug_printf("from_shell has poll err.\r\n");
+          _debug_printf("from_shell has poll err.\r\n");
         if (pollfds[1].revents & POLLHUP)
-          debug_printf("from_shell has hung up.\r\n");
+          _debug_printf("from_shell has hung up.\r\n");
         _c(close(*from_shell_fd),
            "Failed to close the read end of shell-to-terminal pipe");
         wait_child();
@@ -317,7 +317,7 @@ int serve(unsigned int portno) {
   // wait for client’s connection, cli_addr stores client’s address
   _c((retfd = accept(listenfd, (struct sockaddr *)&cli_addr, &cli_len)),
      "Failed to accept client's connection");
-  debug_printf("Client connected\n");
+  _debug_printf("Client connected\n");
 
   return retfd;
 }
