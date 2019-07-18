@@ -98,8 +98,8 @@ void usage();
 void exit_cleanup();
 
 struct termios orig_termios_attr;
-void tc_reset();
 void tc_setup();
+void tc_restore();
 
 int client_connect(char *host_name, unsigned int portno);
 
@@ -119,20 +119,18 @@ int main(int argc, char *argv[]) {
 
   unsigned int portno;
   char host_name[256] = "localhost";  // default to localhost
-  char log_pathname[256];
-  char key_pathname[256];
+  char log_pathname[PATH_MAX];
+  char key_pathname[PATH_MAX];
 
   /* option parsing */
   int optc;
   while ((optc = getopt_long(argc, argv, ":", long_opts, NULL)) != -1) {
     switch (optc) {
       case HOST_SHORT_OPTION:
-        // use the given program as the socket
         host_set = true;
         strcpy(host_name, optarg);
         break;
       case PORT_SHORT_OPTION:
-        // use the given program as the socket
         port_set = true;
         portno = atoi(optarg);
         break;
@@ -145,7 +143,6 @@ int main(int argc, char *argv[]) {
         strcpy(key_pathname, optarg);
         break;
       case DEBUG_SHORT_OPTION:
-        // print debug info
         debug = true;
         break;
       default:
@@ -263,27 +260,9 @@ int client_connect(char *host_name, unsigned int portno) {
 }
 
 void exit_cleanup() {
-  tc_reset();
+  tc_restore();
   if (log_set) _c(close(logfd), "Failed to close the log file");
   if (encrypt_set) close_mcrypt_session(session);
-}
-
-void tc_reset() {
-  _c(tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios_attr),
-     "Unable to set termios attributes");
-}
-
-void tc_setup() {
-  struct termios termios_attr;
-  if (tcgetattr(STDIN_FILENO, &termios_attr) == -1) {
-    fprintf(stderr, "Unable to get termios attributes\n");
-    exit(EXIT_FAILURE);
-  }
-  termios_attr.c_iflag = ISTRIP;  // only lower 7 bits
-  termios_attr.c_oflag = 0;       // no processing
-  termios_attr.c_lflag = 0;       // no processing
-  _c(tcsetattr(STDIN_FILENO, TCSANOW, &termios_attr),
-     "Unable to set termios attributes");
 }
 
 void usage() {
@@ -316,6 +295,7 @@ void close_mcrypt_session(MCRYPT session) {
   mcrypt_generic_deinit(session);
   mcrypt_module_close(session);
 }
+
 ssize_t read_socket(int sockfd, void *buf, size_t size) {
   ssize_t count;
   _c(count = recv(sockfd, buf, size, 0),
@@ -337,4 +317,22 @@ void write_socket(int sockfd, void const *buf, size_t size) {
     _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
     if (log_set) write_log(buf, size, LOG_SEND);
   }
+}
+
+void tc_setup() {
+  struct termios termios_attr;
+  if (tcgetattr(STDIN_FILENO, &termios_attr) == -1) {
+    fprintf(stderr, "Unable to get termios attributes\n");
+    exit(EXIT_FAILURE);
+  }
+  termios_attr.c_iflag = ISTRIP;  // only lower 7 bits
+  termios_attr.c_oflag = 0;       // no processing
+  termios_attr.c_lflag = 0;       // no processing
+  _c(tcsetattr(STDIN_FILENO, TCSANOW, &termios_attr),
+     "Unable to set termios attributes");
+}
+
+void tc_restore() {
+  _c(tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios_attr),
+     "Unable to set termios attributes");
 }
