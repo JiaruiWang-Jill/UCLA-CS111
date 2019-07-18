@@ -167,9 +167,6 @@ int main(int argc, char *argv[]) {
 
   atexit(exit_cleanup);
 
-  char buf[512];
-  ssize_t count;
-
   int sockfd = client_connect(host_name, portno);
   struct pollfd pollfds[2];
   pollfds[0].fd = STDIN_FILENO;
@@ -179,6 +176,8 @@ int main(int argc, char *argv[]) {
 
   signal(SIGPIPE, sigpipe_handler);
 
+  char buf[BUF_SIZE];
+  ssize_t count;
   while (true) {
     _c(poll(pollfds, 2, -1), "Failed to poll stdin and from_server");
 
@@ -200,8 +199,7 @@ int main(int argc, char *argv[]) {
 
     /* process socket outputs and forward them to stdout */
     if (pollfds[1].revents & POLLIN) {
-      count = read_socket(sockfd, buf, sizeof(buf));
-      if (count == 0) exit(EXIT_SUCCESS);
+      if ((count = read_socket(sockfd, buf, sizeof(buf)))) exit(EXIT_SUCCESS);
       for (ssize_t i = 0; i < count; i++) switch (buf[i]) {
           case EOT:
             _c(write(STDOUT_FILENO, &buf[i], 1), "Failed to write to stdout");

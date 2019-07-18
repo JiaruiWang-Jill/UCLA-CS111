@@ -130,8 +130,6 @@ int main(int argc, char *argv[]) {
 
   atexit(exit_cleanup);
 
-  char buf[BUF_SIZE];
-
   /* initializing pipes */
   int server_to_shell_fd[2], shell_to_server_fd[2];
   _c(pipe(server_to_shell_fd), "Failed to create terminal-to-shell pipe");
@@ -164,14 +162,14 @@ int main(int argc, char *argv[]) {
     pollfds[1].fd = *from_shell_fd;
     pollfds[1].events = POLLIN + POLLHUP + POLLERR;
 
+    char buf[BUF_SIZE];
     ssize_t count;
     while (true) {
       _c(poll(pollfds, 2, -1), "Failed to poll socket and from_shell");
 
       /* process socket inputs and forward them to the shell */
       if (pollfds[0].revents & POLLIN) {
-        count = read_socket(sockfd, buf, sizeof(buf));
-        if (count == 0) {
+        if ((count = read_socket(sockfd, buf, sizeof(buf))) == 0) {
           wait_child();
           exit(EXIT_SUCCESS);
         }
