@@ -53,13 +53,13 @@ then
 fi
 
 # get copy of our grading/checking functions
-if [ -s ./functions.sh ]; then
-	source ./functions.sh
+if [ -s functions.sh ]; then
+	source functions.sh
 else
 	wget $LIBRARY_URL/functions.sh 2> /dev/null
 	if [ $? -eq 0 ]; then
 		>&2 echo "Downloading functions.sh from $LIBRARY_URL"
-		source ./functions.sh
+		source functions.sh
 	else
 		>&2 echo "FATAL: unable to pull test functions from $LIBRARY_URL"
 		exit -1
@@ -342,6 +342,8 @@ else
 fi
 
 # see if the server properly reported shell exit status
+echo !!!!
+cat SVR_ERR
 grep "STATUS=7" SVR_ERR > /dev/null
 if [ $? -eq 0 ]; then
 	echo "   shell properly receives commands ... PASS"

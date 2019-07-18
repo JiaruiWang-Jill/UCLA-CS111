@@ -10,7 +10,7 @@ clean:
 	rm -rf lab1b-client lab1b-server *.o *.tar.gz
 
 dist: build
-	@tar -zcf lab1b-005181694.tar.gz lab1b-client.c lab1b-server.c Makefile README
+	tar -zcf lab1b-005181694.tar.gz lab1b-client.c lab1b-server.c Makefile README my.key
 
 run: lab1b
 

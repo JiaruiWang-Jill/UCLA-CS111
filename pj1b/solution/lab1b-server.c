@@ -68,7 +68,13 @@ MCRYPT session;
 
 MCRYPT init_mcrypt_session(char *key_pathname) {
   char keybuf[256];
+  char cwd[256];
   int keyfd, keylen;
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    fprintf(stderr, "Current working dir: %s\n", cwd);
+  } else {
+    perror("getcwd() error");
+  }
   _c(keyfd = open(key_pathname, O_RDONLY), "Failed to open key file");
   // read key from the specified file into key_buf
   _c(keylen = read(keyfd, keybuf, 256), "Failed to read from key file");
@@ -115,7 +121,6 @@ void wait_child() {
 
 void exit_cleanup() {
   close_mcrypt_session(session);
-  wait_child();
   _c(close(sockfd), "Failed to close socket");
 };
 
@@ -213,6 +218,7 @@ int main(int argc, char *argv[]) {
       if (pollfds[0].revents & POLLIN) {
         count = read_socket(sockfd, buf, sizeof(buf));
         if (count == 0) {
+  wait_child();
           exit(EXIT_SUCCESS);
         }
         for (int i = 0; i < count; i++) switch (buf[i]) {
@@ -245,6 +251,7 @@ int main(int argc, char *argv[]) {
         _c(count = read(*from_shell_fd, buf, sizeof(buf)),
            "Failed to read from shell-to-terminal pipe");
         if (count == 0) {
+  wait_child();
           exit(EXIT_SUCCESS);
         }
         for (int i = 0; i < count; i++) switch (buf[i]) {
@@ -257,6 +264,7 @@ int main(int argc, char *argv[]) {
               write_socket(sockfd, &buf[i], sizeof(char));
               _c(close(*from_shell_fd),
                  "Failed to close the read end of shell-to-terminal pipe");
+              wait_child();
               exit(EXIT_SUCCESS);
               break;
             default:
@@ -283,6 +291,7 @@ int main(int argc, char *argv[]) {
               _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
                  "Failed to write to stdout");
           }
+        wait_child();
         exit(EXIT_SUCCESS);
       }
 
@@ -293,6 +302,7 @@ int main(int argc, char *argv[]) {
           debug_printf("from_shell has hung up.\r\n");
         _c(close(*from_shell_fd),
            "Failed to close the read end of shell-to-terminal pipe");
+        wait_child();
         exit(EXIT_SUCCESS);
       }
     }
@@ -329,6 +339,7 @@ int main(int argc, char *argv[]) {
        "Failed to execute the designated shell program");
   }
 
+  wait_child();
   exit(EXIT_SUCCESS);
 }
 
@@ -363,6 +374,7 @@ int serve(unsigned int portno) {
 
 void sigpipe_handler(int sig) {
   fprintf(stderr, "SIGPIPE received. signal: %d\r\n", sig);
+  wait_child();
   exit(EXIT_SUCCESS);
 }
 
