@@ -133,13 +133,14 @@ int main(int argc, char *argv[]) {
   char buf[BUF_SIZE];
 
   /* initializing pipes */
-  int server_to_shell_fd[2], shell2server_fd[2];
+  int server_to_shell_fd[2], shell_to_server_fd[2];
   _c(pipe(server_to_shell_fd), "Failed to create terminal-to-shell pipe");
-  _c(pipe(shell2server_fd), "Failed to create shell-to-terminal pipe");
+  _c(pipe(shell_to_server_fd), "Failed to create shell-to-terminal pipe");
 
   int *from_server_fd = &server_to_shell_fd[0],
       *to_shell_fd = &server_to_shell_fd[1];
-  int *from_shell_fd = &shell2server_fd[0], *to_server_fd = &shell2server_fd[1];
+  int *from_shell_fd = &shell_to_server_fd[0],
+      *to_server_fd = &shell_to_server_fd[1];
 
   /* forking */
   _c(child_pid = fork(), "Failed to fork");
