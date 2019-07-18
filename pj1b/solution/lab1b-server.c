@@ -47,7 +47,7 @@ char const INTERRUPT_REPR[] = "^C";
 char const CRLF[] = "\r\n";
 char const LF = '\n';
 
-bool port_set = false, encrypt_set = true, debug = false;
+bool port_set = false, encrypt_set = false, debug = false;
 
 int sockfd;
 
@@ -55,7 +55,23 @@ int sockfd;
  * checks the return value of a syscall and prints error message to stderr */
 void _c(int ret, char *errmsg);
 
+void debug_write(char const *buf, int size) {
+  if (debug)
+    _c(write(STDERR_FILENO, buf, size), "Failed to write debug log to stderr");
+};
+
+void debug_printf(char const *string) {
+  if (debug) fprintf(stderr, "%s", string);
+}
+
 MCRYPT session;
+
+void wait_child(int child_pid) {
+  int status = 0;
+  _c(waitpid(child_pid, &status, 0), "Failed to wait for child process");
+  fprintf(stderr, "SHELL EXIT SIGNAL=%d STATUS=%d\r\n", WTERMSIG(status),
+          WEXITSTATUS(status));
+}
 
 MCRYPT init_mcrypt_session(char *key_pathname) {
   char keybuf[256];
@@ -77,20 +93,22 @@ void close_mcrypt_session(MCRYPT session) {
 }
 
 int read_socket(int sockfd, void *buf, size_t size) {
-  char buf_decrypted[256];
   int count;
-  _c(count = read(sockfd, buf, size),
+  _c(count = recv(sockfd, buf, size, 0),
      "Failed to read from server socket buffer");
-  memcpy(buf_decrypted, buf, size);
-  if (encrypt_set) mdecrypt_generic(session, buf_decrypted, size);
+  if (encrypt_set) mdecrypt_generic(session, buf, count);
   return count;
 }
 
 void write_socket(int sockfd, void const *buf, size_t size) {
-  char buf_encrypted[256];
-  memcpy(buf_encrypted, buf, size);
-  if (encrypt_set) mcrypt_generic(session, buf_encrypted, size);
-  _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
+  if (encrypt_set) {
+    char buf_encrypted[256];
+    memcpy(buf_encrypted, buf, size);
+    mcrypt_generic(session, buf_encrypted, size);
+    _c(send(sockfd, buf_encrypted, size, 0), "Failed to send to socket buffer");
+  } else {
+    _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
+  }
 }
 
 void exit_cleanup() {
@@ -152,7 +170,6 @@ int main(int argc, char *argv[]) {
   atexit(exit_cleanup);
 
   char buf[BUF_SIZE];
-  int count;
 
   /* initializing pipes */
   int server_to_shell_fd[2], shell2server_fd[2];
@@ -186,92 +203,99 @@ int main(int argc, char *argv[]) {
     pollfds[1].fd = *from_shell_fd;
     pollfds[1].events = POLLIN + POLLHUP + POLLERR;
 
+    int count;
     while (true) {
-      _c(poll(pollfds, 2, -1), "Failed to poll stdin and from_shellhell");
-      if (pollfds[0].revents & POLLIN) {
-        // handle socket input
-        read_socket(sockfd, buf, sizeof(buf));
+      _c(poll(pollfds, 2, -1), "Failed to poll stdin and from_shell");
 
+      /* process socket inputs and forward them to the shell */
+      if (pollfds[0].revents & POLLIN) {
+        count = read_socket(sockfd, buf, sizeof(buf));
+        if (count == 0) {
+          wait_child(child_pid);
+          exit(EXIT_SUCCESS);
+        }
         for (int i = 0; i < count; i++) switch (buf[i]) {
             case EOT:
-              if (debug)
-                _c(write(STDOUT_FILENO, EOT_REPR, sizeof(EOT_REPR)),
-                   "Failed to write to stdout");
+              debug_write(EOT_REPR, sizeof(char));
               _c(close(*to_shell_fd),
                  "Failed to close the write end of terminal-to-shell pipe");
               // Should cause (pollfds[1].revents & POLLHUP) to be true
               break;
             case INTERRUPT:
-              if (debug)
-                _c(write(STDOUT_FILENO, INTERRUPT_REPR, sizeof(INTERRUPT_REPR)),
-                   "Failed to write to stdout");
+              debug_write(INTERRUPT_REPR, sizeof(char));
               _c(kill(child_pid, SIGINT),
                  "Failed to send kill signal to child process");
               break;
             case '\r':
             case '\n':
-              if (debug)
-                _c(write(STDOUT_FILENO, CRLF, sizeof(CRLF)),
-                   "Failed to write to stdout");
-              _c(write(*to_shell_fd, &LF, sizeof(LF)),
+              debug_write(CRLF, 2 * sizeof(char));
+              _c(write(*to_shell_fd, &LF, sizeof(char)),
                  "Failed to write to shell");
               break;
             default:
-              _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
-                 "Failed to write to stdout");
+              debug_write(&buf[i], sizeof(char));
               _c(write(*to_shell_fd, &buf[i], sizeof(char)),
                  "Failed to write to shell");
           }
       }
 
-      /* process shell output and forward it to the client */
+      /* process shell outputs and forward it to the socket */
       if (pollfds[1].revents & POLLIN) {
         _c(count = read(*from_shell_fd, buf, sizeof(buf)),
            "Failed to read from shell-to-terminal pipe");
+        if (count == 0) {
+          wait_child(child_pid);
+          exit(EXIT_SUCCESS);
+        }
         for (int i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
-              write_socket(sockfd, CRLF, sizeof(CRLF));
+              debug_write(CRLF, 2 * sizeof(char));
+              write_socket(sockfd, CRLF, 2 * sizeof(char));
               break;
             case EOT:
+              debug_write(EOT_REPR, 2 * sizeof(char));
               write_socket(sockfd, &buf[i], sizeof(char));
               _c(close(*from_shell_fd),
                  "Failed to close the read end of shell-to-terminal pipe");
-              close(sockfd);
+              wait_child(child_pid);
               exit(EXIT_SUCCESS);
               break;
             default:
+              debug_write(&buf[i], sizeof(char));
               write_socket(sockfd, &buf[i], sizeof(char));
           }
       }
 
       if (pollfds[0].revents & (POLLHUP | POLLERR)) {
-        if (debug && (pollfds[0].revents & POLLERR))
-          fprintf(stderr, "STDIN has poll err.\r\n");
-        if (debug && (pollfds[0].revents & POLLHUP))
-          fprintf(stderr, "STDIN has hung up.\r\n");
+        if (pollfds[0].revents & POLLERR)
+          debug_printf("Socket has poll err.\r\n");
+        if (pollfds[0].revents & POLLHUP)
+          debug_printf("Socket has hung up.\r\n");
         _c(count = read(*from_shell_fd, buf, sizeof(buf)),
            "Failed to read from shell-to-terminal pipe");
         for (int i = 0; i < count; i++) switch (buf[i]) {
             case '\n':
+              debug_write(CRLF, 2 * sizeof(char));
               _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
                  "Failed to write to stdout");
               break;
             default:
+              debug_write(&buf[i], sizeof(char));
               _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
                  "Failed to write to stdout");
           }
-        close(sockfd);
+        wait_child(child_pid);
         exit(EXIT_SUCCESS);
       }
 
       if (pollfds[1].revents & (POLLHUP | POLLERR)) {
-        if (debug && (pollfds[1].revents & POLLERR))
-          fprintf(stderr, "from_shell has poll err.\r\n");
-        if (debug && (pollfds[1].revents & POLLHUP))
-          fprintf(stderr, "from_shell has hung up.\r\n");
+        if (pollfds[1].revents & POLLERR)
+          debug_printf("from_shell has poll err.\r\n");
+        if (pollfds[1].revents & POLLHUP)
+          debug_printf("from_shell has hung up.\r\n");
         _c(close(*from_shell_fd),
            "Failed to close the read end of shell-to-terminal pipe");
-        close(sockfd);
+        wait_child(child_pid);
         exit(EXIT_SUCCESS);
       }
     }
@@ -307,6 +331,8 @@ int main(int argc, char *argv[]) {
     _c(execlp(shell_program, shell_program, NULL),
        "Failed to execute the designated shell program");
   }
+
+  exit(EXIT_SUCCESS);
 }
 
 void usage() {
@@ -333,6 +359,7 @@ int serve(unsigned int portno) {
   // wait for client’s connection, cli_addr stores client’s address
   _c((retfd = accept(listenfd, (struct sockaddr *)&cli_addr, &cli_len)),
      "Failed to accept client's connection");
+  debug_printf("Client connected\n");
 
   return retfd;
 }

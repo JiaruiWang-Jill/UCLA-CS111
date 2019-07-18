@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Wextra
+CFLAGS=-Wall -Wextra -lmcrypt
 
 .PHONY: build check clean dist
 .PHONY: $(TESTS)

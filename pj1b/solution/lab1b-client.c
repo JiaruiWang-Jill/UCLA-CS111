@@ -54,20 +54,26 @@ char const INTERRUPT_REPR[] = "^C";
 char const CRLF[] = "\r\n";
 char const LF[] = "\n";
 
-bool host_set = false, port_set = false, log_set = false, encrypt_set = true,
+bool host_set = false, port_set = false, log_set = false, encrypt_set = false,
      debug = false;
 
 int logfd;
 char log_prefix_buf[256];
-char const LOG_SENT_PREFIX[] = "SENT %ld bytes:";
-char const LOG_RECEIVED_PREFIX[] = "RECEIVED %ld bytes:";
+char const LOG_SENT_PREFIX[] = "SENT %ld bytes: ";
+char const LOG_RECEIVED_PREFIX[] = "RECEIVED %ld bytes: ";
+
 void write_log(char const *buf, size_t size, bool flag) {
   // flag: false for receive log, true for send log
   sprintf(log_prefix_buf, flag ? LOG_SENT_PREFIX : LOG_RECEIVED_PREFIX, size);
   _c(write(logfd, log_prefix_buf, strlen(log_prefix_buf)),
-     "Failed to write log");
+     "Failed to write log prefix");
   _c(write(logfd, buf, size), "Failed to write encrypted cotent to log");
-  _c(write(logfd, CRLF, sizeof(CRLF)), "Failed to write to log");
+  _c(write(logfd, LF, sizeof(char)), "Failed to write new line to log");
+}
+
+void sigpipe_handler(int sig) {
+  fprintf(stderr, "SIGPIPE received. signal: %d\r\n", sig);
+  exit(EXIT_SUCCESS);
 }
 
 MCRYPT session;
@@ -92,22 +98,26 @@ void close_mcrypt_session(MCRYPT session) {
 }
 
 int read_socket(int sockfd, void *buf, size_t size) {
-  char buf_decrypted[256];
   int count;
-  _c(count = read(sockfd, buf, size),
+  _c(count = recv(sockfd, buf, size, 0),
      "Failed to read from server socket buffer");
-  memcpy(buf_decrypted, buf, size);
-  if (encrypt_set) mdecrypt_generic(session, buf_decrypted, size);
-  if (log_set) write_log(buf, sizeof(buf), LOG_RECEIVE);
+  if (count == 0) return 0;
+  if (log_set) write_log(buf, count, LOG_RECEIVE);
+  if (encrypt_set) mdecrypt_generic(session, buf, count);
   return count;
 }
 
 void write_socket(int sockfd, void const *buf, size_t size) {
-  char buf_encrypted[256];
-  memcpy(buf_encrypted, buf, size);
-  if (encrypt_set) mcrypt_generic(session, buf_encrypted, size);
-  _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
-  if (log_set) write_log(buf, size, LOG_SEND);
+  if (encrypt_set) {
+    char buf_encrypted[256];
+    memcpy(buf_encrypted, buf, size);
+    mcrypt_generic(session, buf_encrypted, size);
+    if (log_set) write_log(buf_encrypted, size, LOG_SEND);
+    _c(send(sockfd, buf_encrypted, size, 0), "Failed to send to socket buffer");
+  } else {
+    _c(send(sockfd, buf, size, 0), "Failed to send to socket buffer");
+    if (log_set) write_log(buf, size, LOG_SEND);
+  }
 }
 
 void usage();
@@ -197,17 +207,19 @@ int main(int argc, char *argv[]) {
   pollfds[1].fd = sockfd;
   pollfds[1].events = POLLIN + POLLHUP + POLLERR;
 
+  signal(SIGPIPE, sigpipe_handler);
+
   while (true) {
     _c(poll(pollfds, 2, -1), "Failed to poll stdin and from_server");
 
-    /* process keyboard input and forward to socket */
+    /* process keyboard inputs and forward them to socket */
     if (pollfds[0].revents & POLLIN) {
       _c(count = read(STDIN_FILENO, buf, sizeof(buf)),
          "Failed to read from stdin");
       for (int i = 0; i < count; i++) switch (buf[i]) {
           case '\r':
           case '\n':
-            _c(write(STDOUT_FILENO, CRLF, sizeof(CRLF)),
+            _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
                "Failed to write to stdout");
             write_socket(sockfd, LF, sizeof(LF));
             break;
@@ -218,10 +230,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* process socket output and forward to stdout */
+    /* process socket outputs and forward them to stdout */
     if (pollfds[1].revents & POLLIN) {
-      // handle server output
       count = read_socket(sockfd, buf, sizeof(buf));
+      if (count == 0) exit(EXIT_SUCCESS);
       for (int i = 0; i < count; i++) switch (buf[i]) {
           case EOT:
             _c(write(STDOUT_FILENO, &buf[i], sizeof(char)),
@@ -239,7 +251,8 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "STDIN has poll err.\r\n");
       if (debug && (pollfds[0].revents & POLLHUP))
         fprintf(stderr, "STDIN has hung up.\r\n");
-      read_socket(sockfd, buf, sizeof(buf));
+      count = read_socket(sockfd, buf, sizeof(buf));
+      if (count == 0) exit(EXIT_SUCCESS);
       for (int i = 0; i < count; i++) switch (buf[i]) {
           case '\n':
             _c(write(STDOUT_FILENO, CRLF, 2 * sizeof(char)),
@@ -260,6 +273,7 @@ int main(int argc, char *argv[]) {
       exit(EXIT_SUCCESS);
     }
   }
+  exit(EXIT_SUCCESS);
 }
 
 int client_connect(char *host_name, unsigned int portno) {
