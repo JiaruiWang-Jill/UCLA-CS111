@@ -1,0 +1,26 @@
+NAME: Qingwei Zeng
+EMAIL: zenn@ucla.edu
+ID: 005181694
+SLIPDAYS: 0
+
+The program 'pj4a' includes the following files:
+ - my_beaglebone.jpg
+   a selfie of I holding my assembled Beaglebone.
+ - connected.png
+   a screen shot from a USB terminal command session connected to my system,
+   showing that I gave it a name and configured network access.
+ - copy.png
+   a screen shot from a local session in which you copy a hello world program
+   from your laptop/desktop to your Beaglebone.
+ - build_run.png
+   a screen shot from a WIFI SSH session in which I build and run a trivial
+   (hello world) program.
+ - git.png
+   a screen shot from a WIFI SSH session in which I install git and clone a
+   repository.
+ - Makefile
+   a Makefile to build the tarball.
+ - README
+
+Beaglebone S/N: BBGW18031212
+MAC: 2CF7F10678BB
