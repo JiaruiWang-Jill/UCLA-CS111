@@ -4,11 +4,12 @@ CFLAGS=-Wall -Wextra
 .PHONY: build tests graphs dist clean
 .PHONY: $(TESTS)
 
-build: lab2_add lab2_list
+build: lab2_add
 
-tests:
+tests: build
+	./tests_add.sh > lab2_add.csv
 
-graphs:
+graphs: tests
 
 dist:
 	tar -zcf lab2a-005181694.tar.gz \
@@ -19,10 +20,10 @@ dist:
 clean:
 	rm -rf lab2_add lab2_list *.o *.tar.gz
 
-lab2_add: SortedList
-	$(CC) $(CFLAGS) -pthread lab2_add.c SortedList.o -o lab2_add
+lab2_add: lab2_add.c
+	$(CC) $(CFLAGS) -pthread lab2_add.c -o lab2_add
 
-lab2_list: SortedList
+lab2_list: lab2_list.c SortedList.o
 	$(CC) $(CFLAGS) -pthread lab2_list.c SortedList.o -o lab2_list
 
 SortedList.o:

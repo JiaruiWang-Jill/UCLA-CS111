@@ -7,7 +7,9 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <memory.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +23,22 @@
 #define YIELD_SHORT_OPTION 258
 #define SYNC_SHORT_OPTION 259
 
+#define EXIT_WRONG_RESULT 2
+
+int thread_n = 1,     // number of parallel threads, defaults to 1
+    iteration_n = 1;  // number of iterations, defaults to 1
+bool opt_yield = false;
+char opt_sync;
+
+int spin_lock = 0;
+pthread_mutex_t mutex;
+char test_name[256];
+char sync_partial_name[5] = "none";
+
+long long counter = 0;
+
+struct timespec start_time, end_time;
+
 struct addArgs {
   long long *pointer;
   long long value;
@@ -33,6 +51,11 @@ void _c(int ret, char *errmsg);
 void usage();
 
 void add(long long *pointer, long long value);
+void add_mutex(long long *pointer, long long value);
+void add_test_and_set(long long *pointer, long long value);
+void add_compare_and_swap(long long *pointer, long long value);
+
+void thread_op();
 
 void timer_start();
 void timer_end();
@@ -41,29 +64,43 @@ void timer_end();
 static struct option const long_opts[] = {
     {"threads", required_argument, NULL, THREADS_SHORT_OPTION},
     {"iterations", required_argument, NULL, ITERATIONS_SHORT_OPTION},
-    {"yield", required_argument, NULL, YIELD_SHORT_OPTION},
+    {"yield", no_argument, NULL, YIELD_SHORT_OPTION},
     {"sync", required_argument, NULL, SYNC_SHORT_OPTION},
     {0, 0, 0, 0},
 };
 
-int threads = 1, iterations = 1;
-
-struct timespec start_time, end_time;
+void check_sync_opt(char *optarg);
 
 int main(int argc, char *argv[]) {
-  long long counter = 0;
-
   /* option parsing */
   int optc;
   while ((optc = getopt_long(argc, argv, ":", long_opts, NULL)) != -1) {
     switch (optc) {
       case THREADS_SHORT_OPTION:
+        thread_n = atoi(optarg);
         break;
       case ITERATIONS_SHORT_OPTION:
+        iteration_n = atoi(optarg);
         break;
       case YIELD_SHORT_OPTION:
+        opt_yield = true;
         break;
       case SYNC_SHORT_OPTION:
+        check_sync_opt(optarg);
+        opt_sync = *optarg;
+        switch (opt_sync) {
+          case 'm':
+            strcpy(sync_partial_name, "m");
+            _c(pthread_mutex_init(&mutex, NULL), "Failed to initialize mutex.");
+          case 's':
+            strcpy(sync_partial_name, "s");
+            break;
+            break;
+          case 'c':
+            strcpy(sync_partial_name, "c");
+            break;
+        }
+        // TODO: set sync mode
         break;
       default:
         fputs("Invalid arguments.\n", stderr);
@@ -71,23 +108,86 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  /* pre-threading */
-  pthread_t thread_id;
+  int op_n = thread_n * iteration_n * 2;
+
+  pthread_t threads[thread_n];
   timer_start();
 
-  /* run the threads */
-  for (int i = 0; i < threads; i++)
-    _c(pthread_create(&thread_id, NULL, add, NULL), "Failed to create thread");
-  _c(pthread_join(thread_id, NULL), "Failed to join threads");
+  _c(clock_gettime(CLOCK_MONOTONIC, &start_time) < 0,
+     "Failed to record the start time");
 
-  /* post-threading */
+  for (int i = 0; i < thread_n; i++)
+    _c(pthread_create(&threads[i], NULL, (void *)&thread_op, NULL),
+       "Failed to create thread");
 
-  exit(EXIT_SUCCESS);
+  for (int i = 0; i < thread_n; i++)
+    _c(pthread_join(threads[i], NULL), "Failed to join threads");
+
+  _c(clock_gettime(CLOCK_MONOTONIC, &end_time) < 0,
+     "Failed to record the end time");
+
+  // TODO: check the correct usage
+  long long runtime = end_time.tv_nsec - start_time.tv_nsec;
+
+  // create test name
+  sprintf(test_name, "add-%s%s", opt_yield ? "yield-" : "", sync_partial_name);
+  printf("%s,%d,%d,%d,%lld,%lld,%lld\n", test_name, thread_n, iteration_n, op_n,
+         runtime, runtime / op_n, counter);
+
+  exit(counter != 0 ? EXIT_WRONG_RESULT : EXIT_SUCCESS);
 }
 
 void add(long long *pointer, long long value) {
   long long sum = *pointer + value;
+  if (opt_yield) sched_yield();
   *pointer = sum;
+}
+
+void add_mutex(long long *pointer, long long value) {
+  pthread_mutex_lock(&mutex);
+  long long sum = *pointer + value;
+  if (opt_yield) sched_yield();
+  *pointer = sum;
+  pthread_mutex_unlock(&mutex);
+}
+
+void add_test_and_set(long long *pointer, long long value) {
+  while (__sync_lock_test_and_set(&spin_lock, 1))
+    ;
+  long long sum = *pointer + value;
+  if (opt_yield) sched_yield();
+  *pointer = sum;
+  __sync_lock_release(&spin_lock);
+}
+
+void add_compare_and_swap(long long *pointer, long long value) {
+  long long old;
+  do {
+    old = counter;
+    if (opt_yield) sched_yield();
+  } while (__sync_val_compare_and_swap(pointer, old, old + value) != old);
+}
+
+void thread_op() {
+  void (*add_fn)(long long *, long long);
+  switch (opt_sync) {
+    case 'm':
+      add_fn = add_mutex;
+      break;
+    case 's':
+      add_fn = add_test_and_set;
+      break;
+    case 'c':
+      add_fn = add_compare_and_swap;
+      break;
+    default:
+      add_fn = add;
+  }
+
+  // add 1 to the counter the specified number of times
+  for (long i = 0; i < iteration_n; i++) add_fn(&counter, 1);
+  // add -1 to the counter the specified number of times
+  for (long i = 0; i < iteration_n; i++) add_fn(&counter, -1);
 }
 
 void timer_start() {
@@ -98,6 +198,14 @@ void timer_start() {
 void timer_end() {
   _c(clock_gettime(CLOCK_REALTIME, &end_time),
      "Failed to retrieve the end time");
+}
+
+void check_sync_opt(char *optarg) {
+  if (strcmp(optarg, "c") == 0 && strcmp(optarg, "s") == 0 &&
+      strcmp(optarg, "m") == 0) {
+    fprintf(stderr, "Invalid sync option argument\n");
+    usage();
+  }
 }
 
 void usage() {
@@ -115,6 +223,7 @@ Usage: %s\n\
 --iterations=ITERNUM  number of iterations to run, defaults to 1\n\
 ",
       stderr);
+  // TODO: yield options, sync options
   exit(EXIT_FAILURE);
 }
 
