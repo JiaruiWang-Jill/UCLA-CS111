@@ -4,10 +4,15 @@ CFLAGS=-Wall -Wextra
 .PHONY: build tests graphs dist clean
 .PHONY: $(TESTS)
 
-build: lab2_add
+build: lab2_add lab2_list
 
-tests: build
+tests: tests_add tests_list
+
+tests_add: lab2_add
 	./tests_add.sh > lab2_add.csv
+
+tests_list: lab2_list
+	-./tests_list.sh > lab2_list.csv
 
 graphs: tests
 
@@ -23,9 +28,6 @@ clean:
 lab2_add: lab2_add.c
 	$(CC) $(CFLAGS) -pthread lab2_add.c -o lab2_add
 
-lab2_list: lab2_list.c SortedList.o
-	$(CC) $(CFLAGS) -pthread lab2_list.c SortedList.o -o lab2_list
-
-SortedList.o:
-	$(CC) $(CFLAGS) -c SortedList.c -o SortedList.o
+lab2_list: lab2_list.c SortedList.c
+	$(CC) $(CFLAGS) -pthread lab2_list.c SortedList.c -o lab2_list
 
