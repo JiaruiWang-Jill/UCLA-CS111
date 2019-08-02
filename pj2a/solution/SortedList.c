@@ -30,24 +30,23 @@ void SortedList_insert(SortedList_t *list, SortedListElement_t *elem) {
 
   for (SortedListElement_t *curr = list->next; curr->next != list;
        curr = curr->next) {
-    if (elem->key < curr->key) {
+    if (strcmp(elem->key, curr->key) < 0) {
       elem->prev = curr->prev;
       elem->next = curr;
-      elem->prev->next = elem;
+      curr->prev->next = elem;
       curr->prev = elem;
       return;
     }
   }
 
+  // hit the end of the list
   elem->prev = list->prev;
   elem->next = list;
-  elem->prev->next = elem;
+  list->prev->next = elem;
   list->prev = elem;
-  printf("inserted\n");
 }
 
 int SortedList_delete(SortedListElement_t *elem) {
-  printf("delete called!\n");
   const char ERR_PROMPT[] = "Failed to delete the given element";
 
   if (elem == NULL) {
@@ -69,7 +68,6 @@ int SortedList_delete(SortedListElement_t *elem) {
 }
 
 SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
-  printf("lookup called!\n");
   const char ERR_PROMPT[] = "Failed to lookup the given key in the list";
 
   if (list == NULL) {
@@ -87,7 +85,6 @@ SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
 }
 
 int SortedList_length(SortedList_t *list) {
-  printf("length called!\n");
   const char ERR_PROMPT[] = "Failed to find the length of the list";
 
   if (list == NULL) {

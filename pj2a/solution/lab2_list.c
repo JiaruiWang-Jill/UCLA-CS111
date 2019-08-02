@@ -44,6 +44,7 @@ char yield_partial_name[5] = "none";
 char sync_partial_name[5] = "none";
 
 SortedList_t list;
+SortedList_t *head;
 SortedListElement_t *nodes;
 
 long long counter = 0;
@@ -76,8 +77,11 @@ static struct option const long_opts[] = {
 void check_opt_sync(char *optarg);
 
 int main(int argc, char *argv[]) {
-  list.next = &list;
-  list.prev = &list;
+  /* initialized list head */
+  head = &list;
+  head->next = head;
+  head->prev = head;
+  /* seed random */
   srand(time(0));
   /* option parsing */
   int optc;
@@ -200,7 +204,7 @@ void check_opt_sync(char *optarg) {
 }
 
 void thread_op(void *tid_) {
-  int tid = (int)tid_;
+  int tid = *((int *)tid_);
 
   switch (opt_sync) {
     case 'm':
@@ -213,10 +217,10 @@ void thread_op(void *tid_) {
   }
 
   for (long i = 0; i < iter_n; i++) {
-    SortedList_insert(&list, &nodes[tid * iter_n]);
+    SortedList_insert(head, &nodes[tid * iter_n]);
   }
 
-  if ((list_len = SortedList_length(&list)) < iter_n) {
+  if ((list_len = SortedList_length(head)) < iter_n) {
     fprintf(stderr, "Failed to insert all nodes. Should be %ld, but get %ld.\n",
             iter_n, list_len);
     exit(EXIT_WRONG_RESULT);
@@ -225,7 +229,7 @@ void thread_op(void *tid_) {
   SortedListElement_t *curr;
 
   for (long i = 0; i < iter_n; i++) {
-    if ((curr = SortedList_lookup(&list, nodes[i].key)) == NULL) {
+    if ((curr = SortedList_lookup(head, nodes[i].key)) == NULL) {
       fprintf(stderr, "Failure to look up element");
       exit(EXIT_WRONG_RESULT);
     }
@@ -277,3 +281,4 @@ void _c(int ret, char *errmsg) {
   fprintf(stderr, "%s: %s. errno %d\n", errmsg, strerror(errno), errno);
   exit(EXIT_FAILURE);
 }
+
