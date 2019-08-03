@@ -8,112 +8,51 @@
 
 ADD="./lab2_add"
 
-$ADD --threads=2  --iterations=100
-$ADD --threads=2  --iterations=1000
-$ADD --threads=2  --iterations=10000
-$ADD --threads=2  --iterations=100000
-$ADD --threads=4  --iterations=100
-$ADD --threads=4  --iterations=1000
-$ADD --threads=4  --iterations=10000
-$ADD --threads=4  --iterations=100000
-$ADD --threads=8  --iterations=100
-$ADD --threads=8  --iterations=1000
-$ADD --threads=8  --iterations=10000
-$ADD --threads=8  --iterations=100000
-$ADD --threads=12 --iterations=100
-$ADD --threads=12 --iterations=1000
-$ADD --threads=12 --iterations=10000
-$ADD --threads=12 --iterations=100000
+for t in 2 4 8 12; do
+  for i in 100 1000 10000 100000; do
+    $ADD --threads=$t --iterations=$i
+  done
+done
 
-$ADD --threads=2  --iterations=10     --yield
-$ADD --threads=4  --iterations=10     --yield
-$ADD --threads=8  --iterations=10     --yield
-$ADD --threads=12 --iterations=10     --yield
-$ADD --threads=2  --iterations=20     --yield
-$ADD --threads=4  --iterations=20     --yield
-$ADD --threads=8  --iterations=20     --yield
-$ADD --threads=12 --iterations=20     --yield
-$ADD --threads=2  --iterations=40     --yield
-$ADD --threads=4  --iterations=40     --yield
-$ADD --threads=8  --iterations=40     --yield
-$ADD --threads=12 --iterations=40     --yield
-$ADD --threads=2  --iterations=80     --yield
-$ADD --threads=4  --iterations=80     --yield
-$ADD --threads=8  --iterations=80     --yield
-$ADD --threads=12 --iterations=80     --yield
-$ADD --threads=2  --iterations=100    --yield
-$ADD --threads=4  --iterations=100    --yield
-$ADD --threads=8  --iterations=100    --yield
-$ADD --threads=12 --iterations=100    --yield
-$ADD --threads=2  --iterations=1000   --yield
-$ADD --threads=4  --iterations=1000   --yield
-$ADD --threads=8  --iterations=1000   --yield
-$ADD --threads=12 --iterations=1000   --yield
-$ADD --threads=2  --iterations=10000  --yield
-$ADD --threads=4  --iterations=10000  --yield
-$ADD --threads=8  --iterations=10000  --yield
-$ADD --threads=12 --iterations=10000  --yield
-$ADD --threads=2  --iterations=100000 --yield
-$ADD --threads=4  --iterations=100000 --yield
-$ADD --threads=8  --iterations=100000 --yield
-$ADD --threads=12 --iterations=100000 --yield
+# lab2_add-1.png
+#   threads and iterations required to generate a failure (with and without
+#   yields)
+for t in 2 4 8 12; do
+  for i in 10 20 40 80 100 1000 10000; do
+    $ADD --threads=$t --iterations=$i --yield
+  done
+done
 
-$ADD --threads=1  --iterations=100
-$ADD --threads=1  --iterations=1000
-$ADD --threads=1  --iterations=10000
-$ADD --threads=1  --iterations=100000
-$ADD --threads=1  --iterations=1000000
-$ADD --threads=2  --iterations=100
-$ADD --threads=2  --iterations=1000
-$ADD --threads=2  --iterations=10000
-$ADD --threads=2  --iterations=100000
-$ADD --threads=2  --iterations=1000000
-$ADD --threads=4  --iterations=100
-$ADD --threads=4  --iterations=1000
-$ADD --threads=4  --iterations=10000
-$ADD --threads=4  --iterations=100000
-$ADD --threads=4  --iterations=1000000
-$ADD --threads=1  --iterations=100     --yield
-$ADD --threads=1  --iterations=1000    --yield
-$ADD --threads=1  --iterations=10000   --yield
-$ADD --threads=1  --iterations=100000  --yield
-$ADD --threads=1  --iterations=1000000 --yield
-$ADD --threads=2  --iterations=100     --yield
-$ADD --threads=2  --iterations=1000    --yield
-$ADD --threads=2  --iterations=10000   --yield
-$ADD --threads=2  --iterations=100000  --yield
-$ADD --threads=2  --iterations=1000000 --yield
-$ADD --threads=4  --iterations=100     --yield
-$ADD --threads=4  --iterations=1000    --yield
-$ADD --threads=4  --iterations=10000   --yield
-$ADD --threads=4  --iterations=100000  --yield
-$ADD --threads=4  --iterations=1000000 --yield
+# lab2_add-2.png
+#   average time per operation with and without yields.
+for t in 2 8; do
+  for i in 100 1000 10000 100000; do
+    $ADD --threads=$t --iterations=$i --yield
+    $ADD --threads=$t --iterations=$i
+  done
+done
 
-$ADD --threads=2  --iterations=10000 --yield --sync=m
-$ADD --threads=4  --iterations=10000 --yield --sync=m
-$ADD --threads=8  --iterations=10000 --yield --sync=m
-$ADD --threads=12 --iterations=10000 --yield --sync=m
-$ADD --threads=2  --iterations=10000 --yield --sync=c
-$ADD --threads=4  --iterations=10000 --yield --sync=c
-$ADD --threads=8  --iterations=10000 --yield --sync=c
-$ADD --threads=12 --iterations=10000 --yield --sync=c
-$ADD --threads=2  --iterations=10000 --yield --sync=s
-$ADD --threads=4  --iterations=10000 --yield --sync=s
-$ADD --threads=8  --iterations=1000  --yield --sync=s
-$ADD --threads=12 --iterations=1000  --yield --sync=s
+# lab2_add-3.png
+#   average time per (single threaded) operation vs. the number of iterations
+for i in 100 1000 10000 100000; do
+  $ADD --threads=1 --iterations=$i
+done
 
-$ADD --threads=1  --iterations=10000 --sync=m
-$ADD --threads=2  --iterations=10000 --sync=m
-$ADD --threads=4  --iterations=10000 --sync=m
-$ADD --threads=8  --iterations=10000 --sync=m
-$ADD --threads=12 --iterations=10000 --sync=m
-$ADD --threads=1  --iterations=10000 --sync=c
-$ADD --threads=2  --iterations=10000 --sync=c
-$ADD --threads=4  --iterations=10000 --sync=c
-$ADD --threads=8  --iterations=10000 --sync=c
-$ADD --threads=12 --iterations=10000 --sync=c
-$ADD --threads=1  --iterations=10000 --sync=s
-$ADD --threads=2  --iterations=10000 --sync=s
-$ADD --threads=4  --iterations=10000 --sync=s
-$ADD --threads=8  --iterations=10000 --sync=s
-$ADD --threads=12 --iterations=10000 --sync=s
+# lab2_add-4.png
+#   threads and iterations that can run successfully with yields under each
+#   of the synchronization options.
+for t in 2 4 8 12; do
+    $ADD --threads=$t --iterations=10000 --yield --sync=m
+    $ADD --threads=$t --iterations=10000 --yield --sync=c
+    $ADD --threads=$t --iterations=1000 --yield --sync=s
+done
+
+# lab2_add-5.png
+# average time per (protected) operation vs. the number of threads.
+for t in 1 2 4 8 12; do
+    $ADD --threads=$t --iterations=10000
+    $ADD --threads=$t --iterations=10000 --sync=m
+    $ADD --threads=$t --iterations=10000 --sync=c
+    $ADD --threads=$t --iterations=10000 --sync=s
+done
+

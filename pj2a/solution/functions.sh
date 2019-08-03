@@ -74,7 +74,7 @@ function dirCheck {
 
 	if [ -d "$1" ]; then
 		ls -a $1 > /tmp/DIRCHECK.$2
-		cmp /tmp/DIRSNAP.$2 /tmp/DIRCHECK.$2 
+		cmp /tmp/DIRSNAP.$2 /tmp/DIRCHECK.$2
 		if [ $? -ne 0 ]; then
 			echo "Incorrect directory contents:"
 			diff /tmp/DIRSNAP.$2 /tmp/DIRCHECK.$2
@@ -102,7 +102,7 @@ function cleanup {
 		echo ... removing test directory $TESTDIR
 		rm -rf $TESTDIR /tmp/DIRSNAP.$1
 	fi
-		
+
 	echo
 	if [ $2 -eq 0 ]; then
 		echo "SUBMISSION $TARBALL ... passes sanity check"
@@ -135,7 +135,7 @@ function getIDs {
 		>&2 echo "$1 contains no ID: string"
 		return 1
 	fi
-	
+
 	# see if there are two submitters
 	f1=`echo $result | cut -f1 -d,`
 	f2=`echo $result | cut -f2 -d,`
@@ -183,7 +183,7 @@ function getEmail {
 		>&2 echo "$1 contains no EMAIL: string"
 		return 1
 	fi
-	
+
 	# see if there are two submitters
 	f1=`echo $result | cut -f1 -d,`
 	f2=`echo $result | cut -f2 -d,`
@@ -231,7 +231,7 @@ function getName {
 		>&2 echo "$1 contains no NAME: string"
 		return 1
 	fi
-	
+
 	>&2 echo "    submitter(s): $result ... OK"
 	echo $result
 	return 0
@@ -686,7 +686,7 @@ function timeout_init {
 
 	# see if we already have a timeout file
 	if [ ! -s "$assgt-timeout" ]; then
-		# prompt for and read in a timeout 
+		# prompt for and read in a timeout
 		>&2 echo -n "What is the timeout (in seconds)? "
 		read value
 		if [ -z "$value" ]; then

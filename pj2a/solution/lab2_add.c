@@ -93,7 +93,6 @@ int main(int argc, char *argv[]) {
             strcpy(sync_partial_name, "c");
             break;
         }
-        // TODO: set sync mode
         break;
       default:
         fputs("Invalid arguments.\n", stderr);
@@ -118,7 +117,6 @@ int main(int argc, char *argv[]) {
   _c(clock_gettime(CLOCK_MONOTONIC, &end_time),
      "Failed to record the end time");
 
-  // TODO: check the correct usage
   long long runtime = end_time.tv_nsec - start_time.tv_nsec;
 
   // create test name
@@ -197,16 +195,19 @@ void usage() {
 Usage: %s\n\
        %s --threads=THREADNUM\n\
        %s --=iterations=ITERNUM\n\
+       %s --yield\n\
+       %s --sync=[m|s|c]\n\
 \n\
 ",
-          program_name, program_name, program_name);
+          program_name, program_name, program_name, program_name, program_name);
   fputs(
       "\
 --threads=THREADNUM   number of threads to use, defaults to 1\n\
 --iterations=ITERNUM  number of iterations to run, defaults to 1\n\
+--yield=              yield mode, i: insert, d: delete, l: lookup\n\
+--sync=[m|s|c]        sync mode, m: mutex, s: spin, c: compare_and_swap\n\
 ",
       stderr);
-  // TODO: yield options, sync options
   exit(EXIT_FAILURE);
 }
 

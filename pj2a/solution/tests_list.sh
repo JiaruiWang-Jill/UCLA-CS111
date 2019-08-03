@@ -9,138 +9,36 @@
 LIST="./lab2_list"
 
 
-$LIST --threads=1  --iterations=10
-$LIST --threads=1  --iterations=100
-$LIST --threads=1  --iterations=1000
-$LIST --threads=1  --iterations=10000
-$LIST --threads=1  --iterations=20000
+# lab2_list-1.png
+for i in 10 100 1000 10000 20000; do
+  $LIST --threads=1 --iterations=$i
+done
 
-$LIST --threads=2  --iterations=1
-$LIST --threads=2  --iterations=10
-$LIST --threads=2  --iterations=100
-$LIST --threads=2  --iterations=1000
-$LIST --threads=4  --iterations=1
-$LIST --threads=4  --iterations=10
-$LIST --threads=4  --iterations=100
-$LIST --threads=4  --iterations=1000
-$LIST --threads=8  --iterations=1
-$LIST --threads=8  --iterations=10
-$LIST --threads=8  --iterations=100
-$LIST --threads=8  --iterations=1000
-$LIST --threads=12 --iterations=1
-$LIST --threads=12 --iterations=10
-$LIST --threads=12 --iterations=100
-$LIST --threads=12 --iterations=1000
+# lab2_list-2.png
+for t in 2 4 8 12; do
+  for i in 1 10 100 1000; do
+    $LIST --threads=$t --iterations=$i
+  done
+done
+for t in 2 4 8 12; do
+  for i in 1 2 4 8 16 32; do
+    for y in i d il dl; do
+      $LIST --threads=$t --iterations=$i --yield=$y
+    done
+  done
+done
 
-$LIST --threads=2  --iterations=1   --yield=i
-$LIST --threads=2  --iterations=2   --yield=i
-$LIST --threads=2  --iterations=4   --yield=i
-$LIST --threads=2  --iterations=8   --yield=i
-$LIST --threads=2  --iterations=16  --yield=i
-$LIST --threads=2  --iterations=32  --yield=i
-$LIST --threads=4  --iterations=1   --yield=i
-$LIST --threads=4  --iterations=2   --yield=i
-$LIST --threads=4  --iterations=4   --yield=i
-$LIST --threads=4  --iterations=8   --yield=i
-$LIST --threads=4  --iterations=16  --yield=i
-$LIST --threads=8  --iterations=1   --yield=i
-$LIST --threads=8  --iterations=2   --yield=i
-$LIST --threads=8  --iterations=4   --yield=i
-$LIST --threads=8  --iterations=8   --yield=i
-$LIST --threads=8  --iterations=16  --yield=i
-$LIST --threads=12 --iterations=1   --yield=i
-$LIST --threads=12 --iterations=2   --yield=i
-$LIST --threads=12 --iterations=4   --yield=i
-$LIST --threads=12 --iterations=8   --yield=i
-$LIST --threads=12 --iterations=16  --yield=i
+# lab2_list-3.png
+for y in i d il dl; do
+  for s in s m; do
+    $LIST --threads=12 --iterations=32 --yield=$y --sync=$s
+  done
+done
 
-$LIST --threads=2  --iterations=1   --yield=d
-$LIST --threads=2  --iterations=2   --yield=d
-$LIST --threads=2  --iterations=4   --yield=d
-$LIST --threads=2  --iterations=8   --yield=d
-$LIST --threads=2  --iterations=16  --yield=d
-$LIST --threads=2  --iterations=32  --yield=d
-$LIST --threads=4  --iterations=1   --yield=d
-$LIST --threads=4  --iterations=2   --yield=d
-$LIST --threads=4  --iterations=4   --yield=d
-$LIST --threads=4  --iterations=8   --yield=d
-$LIST --threads=4  --iterations=16  --yield=d
-$LIST --threads=8  --iterations=1   --yield=d
-$LIST --threads=8  --iterations=2   --yield=d
-$LIST --threads=8  --iterations=4   --yield=d
-$LIST --threads=8  --iterations=8   --yield=d
-$LIST --threads=8  --iterations=16  --yield=d
-$LIST --threads=12 --iterations=1   --yield=d
-$LIST --threads=12 --iterations=2   --yield=d
-$LIST --threads=12 --iterations=4   --yield=d
-$LIST --threads=12 --iterations=8   --yield=d
-$LIST --threads=12 --iterations=16  --yield=d
+# lab2_list-4.png
+for t in 1 2 4 8 12 16 24; do
+  for s in s m; do
+    $LIST --threads=$t --iterations=1000 --sync=$s
+  done
+done
 
-$LIST --threads=2  --iterations=1   --yield=il
-$LIST --threads=2  --iterations=2   --yield=il
-$LIST --threads=2  --iterations=4   --yield=il
-$LIST --threads=2  --iterations=8   --yield=il
-$LIST --threads=2  --iterations=16  --yield=il
-$LIST --threads=2  --iterations=32  --yield=il
-$LIST --threads=4  --iterations=1   --yield=il
-$LIST --threads=4  --iterations=2   --yield=il
-$LIST --threads=4  --iterations=4   --yield=il
-$LIST --threads=4  --iterations=8   --yield=il
-$LIST --threads=4  --iterations=16  --yield=il
-$LIST --threads=8  --iterations=1   --yield=il
-$LIST --threads=8  --iterations=2   --yield=il
-$LIST --threads=8  --iterations=4   --yield=il
-$LIST --threads=8  --iterations=8   --yield=il
-$LIST --threads=8  --iterations=16  --yield=il
-$LIST --threads=12 --iterations=1   --yield=il
-$LIST --threads=12 --iterations=2   --yield=il
-$LIST --threads=12 --iterations=4   --yield=il
-$LIST --threads=12 --iterations=8   --yield=il
-$LIST --threads=12 --iterations=16  --yield=il
-
-$LIST --threads=2  --iterations=1   --yield=dl
-$LIST --threads=2  --iterations=2   --yield=dl
-$LIST --threads=2  --iterations=4   --yield=dl
-$LIST --threads=2  --iterations=8   --yield=dl
-$LIST --threads=2  --iterations=16  --yield=dl
-$LIST --threads=2  --iterations=32  --yield=dl
-$LIST --threads=4  --iterations=1   --yield=dl
-$LIST --threads=4  --iterations=2   --yield=dl
-$LIST --threads=4  --iterations=4   --yield=dl
-$LIST --threads=4  --iterations=8   --yield=dl
-$LIST --threads=4  --iterations=16  --yield=dl
-$LIST --threads=8  --iterations=1   --yield=dl
-$LIST --threads=8  --iterations=2   --yield=dl
-$LIST --threads=8  --iterations=4   --yield=dl
-$LIST --threads=8  --iterations=8   --yield=dl
-$LIST --threads=8  --iterations=16  --yield=dl
-$LIST --threads=12 --iterations=1   --yield=dl
-$LIST --threads=12 --iterations=2   --yield=dl
-$LIST --threads=12 --iterations=4   --yield=dl
-$LIST --threads=12 --iterations=8   --yield=dl
-$LIST --threads=12 --iterations=16  --yield=dl
-
-$LIST --threads=12 --iterations=32 --yield=i  --sync=m
-$LIST --threads=12 --iterations=32 --yield=d  --sync=m
-$LIST --threads=12 --iterations=32 --yield=il --sync=m
-$LIST --threads=12 --iterations=32 --yield=dl --sync=m
-$LIST --threads=12 --iterations=32 --yield=i  --sync=s
-$LIST --threads=12 --iterations=32 --yield=d  --sync=s
-$LIST --threads=12 --iterations=32 --yield=il --sync=s
-$LIST --threads=12 --iterations=32 --yield=dl --sync=s
-
-$LIST --threads=1  --iterations=1000
-$LIST --threads=1  --iterations=1000 --sync=m
-$LIST --threads=2  --iterations=1000 --sync=m
-$LIST --threads=4  --iterations=1000 --sync=m
-$LIST --threads=8  --iterations=1000 --sync=m
-$LIST --threads=12 --iterations=1000 --sync=m
-$LIST --threads=16 --iterations=1000 --sync=m
-$LIST --threads=24 --iterations=1000 --sync=m
-$LIST --threads=1  --iterations=1000 --sync=s
-$LIST --threads=2  --iterations=1000 --sync=s
-$LIST --threads=4  --iterations=1000 --sync=s
-$LIST --threads=8  --iterations=1000 --sync=s
-$LIST --threads=12 --iterations=1000 --sync=s
-$LIST --threads=16 --iterations=1000 --sync=s
-$LIST --threads=24 --iterations=1000 --sync=s

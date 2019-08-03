@@ -8,10 +8,11 @@
 
 #include "SortedList.h"
 #include <sched.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+int debug = 0;
 
 void SortedList_insert(SortedList_t *list, SortedListElement_t *elem) {
   const char ERR_PROMPT[] = "Failed to insert the given element to the list";
@@ -35,8 +36,14 @@ void SortedList_insert(SortedList_t *list, SortedListElement_t *elem) {
 
   SortedListElement_t *curr;
 
-  for (curr = list->next; curr != list; curr = curr->next)
+  for (curr = list->next; curr != list; curr = curr->next) {
+    if (debug) printf("insert: %ld\n", (long)curr);
+    if (curr->next == curr) {
+      fprintf(stderr, "%s: the list element is self referencing\n", ERR_PROMPT);
+      exit(EXIT_FAILURE);
+    }
     if (strcmp(elem->key, curr->key) < 0) break;
+  }
 
   if (opt_yield & INSERT_YIELD) sched_yield();
 
@@ -82,6 +89,7 @@ SortedListElement_t *SortedList_lookup(SortedList_t *list, const char *key) {
 
   for (SortedListElement_t *curr = list->next; curr != list;
        curr = curr->next) {
+    if (debug) printf("lookup: %ld\n", (long)curr);
     if (opt_yield & LOOKUP_YIELD) sched_yield();
     if (strcmp(curr->key, key) == 0) return curr;
   }
@@ -105,6 +113,8 @@ int SortedList_length(SortedList_t *list) {
   size_t count = 0;
   for (SortedListElement_t *curr = list->next; curr != list;
        curr = curr->next) {
+    if (debug) printf("length: ptr %ld\n", (long)curr);
+    if (debug) printf("key: %s\n", curr->key);
     if (opt_yield & LOOKUP_YIELD) sched_yield();
     count++;
   }

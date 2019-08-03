@@ -45,7 +45,7 @@ char sync_partial_name[5] = "none";
 
 SortedList_t list;
 SortedList_t *head;
-SortedListElement_t *nodes;
+SortedListElement_t *elems;
 
 struct timespec start_time, end_time;
 
@@ -93,17 +93,19 @@ int main(int argc, char *argv[]) {
         iter_n = atoi(optarg);
         break;
       case YIELD_SHORT_OPTION:
-        strcpy(yield_partial_name, optarg);
         for (size_t i = 0; i < strlen(optarg); i++) {
           switch (optarg[i]) {
             case 'i':
               opt_yield |= INSERT_YIELD;
+              strcpy(yield_partial_name, optarg);
               break;
             case 'd':
               opt_yield |= DELETE_YIELD;
+              strcpy(yield_partial_name, optarg);
               break;
             case 'l':
               opt_yield |= LOOKUP_YIELD;
+              strcpy(yield_partial_name, optarg);
               break;
             default:
               fprintf(stderr, "Invalid yield option argument\n");
@@ -132,27 +134,27 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  long node_n = thread_n * iter_n;
+  long elem_n = thread_n * iter_n;
 
   /* allocate memory */
-  if ((nodes = malloc(sizeof(SortedListElement_t) * node_n)) == NULL) {
-    fprintf(stderr, "Failed to allocate memory for nodes\n");
+  if ((elems = malloc(sizeof(SortedListElement_t) * elem_n)) == NULL) {
+    fprintf(stderr, "Failed to allocate memory for elems\n");
     exit(EXIT_FAILURE);
   }
 
   char **keys;
-  if ((keys = malloc(sizeof(char *) * node_n)) == NULL) {
+  if ((keys = malloc(sizeof(char *) * elem_n)) == NULL) {
     fprintf(stderr, "Failed to allocate memory for key pointers\n");
     exit(EXIT_FAILURE);
   }
 
-  for (long i = 0; i < node_n; i++) {
+  for (long i = 0; i < elem_n; i++) {
     if ((keys[i] = malloc(sizeof(char) * KEY_LENGTH)) == NULL) {
       fprintf(stderr, "Could not allocate memory for keys.\n");
       exit(EXIT_FAILURE);
     }
     randomize_key(keys[i]);
-    nodes[i].key = keys[i];
+    elems[i].key = keys[i];
   }
 
   pthread_t *threads;
@@ -161,15 +163,25 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
+  int *tids;
+  if ((tids = malloc(sizeof(int) * thread_n)) == NULL) {
+    fprintf(stderr, "Failed to allocate memory for thread ids\n");
+    exit(EXIT_FAILURE);
+  }
+
+  for (int i = 0; i < thread_n; i++) tids[i] = i;
+
   _c(clock_gettime(CLOCK_MONOTONIC, &start_time),
      "Failed to record the start time");
 
-  for (int tid = 0; tid < thread_n; tid++)
-    _c(pthread_create(&threads[tid], NULL, (void *)&thread_op, (void *)&tid),
+  for (int t = 0; t < thread_n; t++) {
+    _c(pthread_create(&threads[t], NULL, (void *)&thread_op, (void *)&tids[t]),
        "Failed to create thread");
+  }
 
-  for (int tid = 0; tid < thread_n; tid++)
-    _c(pthread_join(threads[tid], NULL), "Failed to join threads");
+  for (int t = 0; t < thread_n; t++) {
+    _c(pthread_join(threads[t], NULL), "Failed to join threads");
+  }
 
   _c(clock_gettime(CLOCK_MONOTONIC, &end_time),
      "Failed to record the end time");
@@ -180,23 +192,22 @@ int main(int argc, char *argv[]) {
 
   /* free memory */
   free(threads);
-  free(nodes);
-  for (long i = 0; i < node_n; i++) free(keys[i]);
+  free(tids);
+  free(elems);
+  for (long i = 0; i < elem_n; i++) free(keys[i]);
   free(keys);
 
-  // TODO: check the correct usage
   long long runtime = end_time.tv_nsec - start_time.tv_nsec;
+  long list_n = 1, op_n = thread_n * iter_n * 3;
 
   // create test name
-  sprintf(test_name, "list-%s-%s", opt_yield ? yield_partial_name : "",
-          sync_partial_name);
-  printf("%s,%d,%ld,%d,%ld,%lld,%lld\n", test_name, thread_n, iter_n, 1,
-         node_n * 3, runtime, runtime / node_n / (iter_n / 4));
+  sprintf(test_name, "list-%s-%s", yield_partial_name, sync_partial_name);
+  printf("%s,%d,%ld,%ld,%ld,%lld,%lld\n", test_name, thread_n, iter_n, list_n,
+         op_n, runtime, runtime / op_n);
 }
 
 void check_opt_sync(char *optarg) {
-  if (strcmp(optarg, "c") == 0 && strcmp(optarg, "s") == 0 &&
-      strcmp(optarg, "m") == 0) {
+  if (strcmp(optarg, "s") == 0 && strcmp(optarg, "m") == 0) {
     fprintf(stderr, "Invalid sync option argument\n");
     usage();
   }
@@ -215,10 +226,13 @@ void thread_op(void *tid_) {
       break;
   }
 
-  for (long i = 0; i < iter_n; i++) SortedList_insert(head, &nodes[tid * i]);
+  for (long i = 0; i < iter_n; i++) {
+    /* printf("tid, index: %d %ld\n", tid, tid * iter_n + i); */
+    SortedList_insert(head, &(elems[tid * iter_n + i]));
+  }
 
   if ((list_len = SortedList_length(head)) < iter_n) {
-    fprintf(stderr, "Failed to insert all nodes. Should be %ld, but get %ld.\n",
+    fprintf(stderr, "Failed to insert all elems. Should be %ld, but get %ld.\n",
             iter_n, list_len);
     exit(EXIT_WRONG_RESULT);
   }
@@ -226,7 +240,7 @@ void thread_op(void *tid_) {
   SortedListElement_t *curr;
 
   for (long i = 0; i < iter_n; i++) {
-    if ((curr = SortedList_lookup(head, nodes[tid * i].key)) == NULL) {
+    if ((curr = SortedList_lookup(head, elems[tid * iter_n + i].key)) == NULL) {
       fprintf(stderr, "The expected list element is not found in the list\n");
       exit(EXIT_WRONG_RESULT);
     }
@@ -247,22 +261,24 @@ void thread_op(void *tid_) {
 }
 
 void usage() {
-  // TODO: update usage text
   fprintf(stderr,
           "\n\
 Usage: %s\n\
        %s --threads=THREADNUM\n\
-       %s --=iterations=ITERNUM\n\
+       %s --iterations=ITERNUM\n\
+       %s --yield=[i|d|l|id|il|dl|idl]\n\
+       %s --sync=[m|s]\n\
 \n\
 ",
-          program_name, program_name, program_name);
+          program_name, program_name, program_name, program_name, program_name);
   fputs(
       "\
---threads=THREADNUM   number of threads to use, defaults to 1\n\
---iterations=ITERNUM  number of iterations to run, defaults to 1\n\
+--threads=THREADNUM            number of threads to use, defaults to 1\n\
+--iterations=ITERNUM           number of iterations to run, defaults to 1\n\
+--yield=[i|d|l|id|il|dl|idl]   yield mode, i: insert, d: delete, l: lookup\n\
+--sync=[m|s]                   sync mode, m: mutex, s: spin\n\
 ",
       stderr);
-  // TODO: yield options, sync options
   exit(EXIT_FAILURE);
 }
 

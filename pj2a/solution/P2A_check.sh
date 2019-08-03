@@ -318,7 +318,7 @@ echo "... usage of expected library functions"
 for r in sched_yield pthread_mutex_lock pthread_mutex_unlock __sync_val_compare_and_swap __sync_lock_test_and_set __sync_lock_release
 do
 	grep $r *.c > /dev/null
-	if [ $? -ne 0 ] 
+	if [ $? -ne 0 ]
 	then
 		echo "No calls to $r"
 		let errors+=1
