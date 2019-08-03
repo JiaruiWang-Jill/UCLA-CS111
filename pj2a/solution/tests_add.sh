@@ -8,18 +8,16 @@
 
 ADD="./lab2_add"
 
+# lab2_add-1.png
+#   threads and iterations required to generate a failure (with and without
+#   yields)
 for t in 2 4 8 12; do
   for i in 100 1000 10000 100000; do
     $ADD --threads=$t --iterations=$i
   done
 done
-
-# lab2_add-1.png
-#   threads and iterations required to generate a failure (with and without
-#   yields)
 for t in 2 4 8 12; do
-  for i in 10 20 40 80 100 1000 10000; do
-    $ADD --threads=$t --iterations=$i
+  for i in 10 20 40 80 100 1000 10000 100000; do
     $ADD --threads=$t --iterations=$i --yield
   done
 done
@@ -43,6 +41,7 @@ done
 #   threads and iterations that can run successfully with yields under each
 #   of the synchronization options.
 for t in 2 4 8 12; do
+    $ADD --threads=$t --iterations=10000 --yield
     $ADD --threads=$t --iterations=10000 --yield --sync=m
     $ADD --threads=$t --iterations=10000 --yield --sync=c
     $ADD --threads=$t --iterations=1000 --yield --sync=s
