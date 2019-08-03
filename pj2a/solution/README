@@ -28,24 +28,43 @@ The program 'pj2a' includes the following files:
 QUESTION 2.1.1 - causing conflicts:
   Why does it take many iterations before errors are seen?
   Why does a significantly smaller number of iterations so seldom fail?
+    > If the number of iteration is small enough, each thread can complete the
+    > entire all its work in one time slice. Race condition would rarely occur,
+    > since threads are unlikely to be interupted.
 
 QUESTION 2.1.2 - cost of yielding:
   Why are the --yield runs so much slower?
+    > because there are overheads to switch the thread state.
   Where is the additional time going?
-  Is it possible to get valid per-operation timings if we are using the --yield option?
-  If so, explain how. If not, explain why not.
+    > the additional time is used to switch thread state.
+  Is it possible to get valid per-operation timings if we are using the
+    --yield option? If so, explain how. If not, explain why not.
+    > No it's not possible with --yield. We can't know how long does the
+    switching take.
 
 QUESTION 2.1.3 - measurement errors:
   Why does the average cost per operation drop with increasing iterations?
-  If the cost per iteration is a function of the number of iterations, how do we know how many iterations to run (or what the "correct" cost is)?
+    > the actual iteration costs belittles the startup costs.
+  If the cost per iteration is a function of the number of iterations, how do
+    we know how many iterations to run (or what the "correct" cost is)?
+    > The more iterations it runs, the more startup costs are amortized.
+    > Hence, if we approximate the "true" cost better, we should run more
+    > iterations.
 
 QUESTION 2.1.4 - costs of serialization:
   Why do all of the options perform similarly for low numbers of threads?
-  Why do the three protected operations slow down as the number of threads rises?
+    > There are limited number of lock waiting when the number of threads
+    > are low.
+  Why do the three protected operations slow down as the number of threads
+    rises?
+    > Because there are many more waiting happening before the critical sections
+    > happening when there are many threads.
 
 QUESTION 2.2.1 - scalability of Mutex
-  Compare the variation in time per mutex-protected operation vs the number of threads in Part-1 (adds) and Part-2 (sorted lists).
-  Comment on the general shapes of the curves, and explain why they have this shape.
+  Compare the variation in time per mutex-protected operation vs the number of
+    threads in Part-1 (adds) and Part-2 (sorted lists). Comment on the general
+    shapes of the curves, and explain why they have this shape.
+    > In Part-1 (adds) the curve curve
   Comment on the relative rates of increase and differences in the shapes of the curves, and offer an explanation for these differences.
 
 QUESTION 2.2.2 - scalability of spin locks
