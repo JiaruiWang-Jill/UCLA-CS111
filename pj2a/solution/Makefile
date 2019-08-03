@@ -8,7 +8,7 @@ build: lab2_add lab2_list
 
 tests: lab2_add.csv lab2_list.csv
 
-graphs: lab2_add.csv lab2_list.csv
+graphs: tests
 	gnuplot lab2_add.gp
 	gnuplot lab2_list.gp
 
@@ -20,10 +20,10 @@ dist: build tests graphs
 clean:
 	rm -rf lab2_add lab2_list *.o *.tar.gz *.png *.csv
 
-lab2_add.csv: lab2_add
+lab2_add.csv: lab2_add tests_add.sh
 	./tests_add.sh > lab2_add.csv
 
-lab2_list.csv: lab2_list
+lab2_list.csv: lab2_list tests_list.sh
 	-./tests_list.sh > lab2_list.csv
 
 tests_sort: SortedList.c sort_test.c

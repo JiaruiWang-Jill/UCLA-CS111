@@ -19,6 +19,7 @@ done
 #   yields)
 for t in 2 4 8 12; do
   for i in 10 20 40 80 100 1000 10000; do
+    $ADD --threads=$t --iterations=$i
     $ADD --threads=$t --iterations=$i --yield
   done
 done
@@ -27,8 +28,8 @@ done
 #   average time per operation with and without yields.
 for t in 2 8; do
   for i in 100 1000 10000 100000; do
-    $ADD --threads=$t --iterations=$i --yield
     $ADD --threads=$t --iterations=$i
+    $ADD --threads=$t --iterations=$i --yield
   done
 done
 
