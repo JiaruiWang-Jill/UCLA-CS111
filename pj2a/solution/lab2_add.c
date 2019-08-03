@@ -204,7 +204,7 @@ Usage: %s\n\
       "\
 --threads=THREADNUM   number of threads to use, defaults to 1\n\
 --iterations=ITERNUM  number of iterations to run, defaults to 1\n\
---yield=              yield mode, i: insert, d: delete, l: lookup\n\
+--yield               whether the add function yields\n\
 --sync=[m|s|c]        sync mode, m: mutex, s: spin, c: compare_and_swap\n\
 ",
       stderr);
