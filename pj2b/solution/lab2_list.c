@@ -121,6 +121,7 @@ int main(int argc, char *argv[]) {
               fprintf(stderr, "Invalid yield option argument\n");
           }
         }
+        break;
       case SYNC_SHORT_OPTION:
         check_opt_sync(optarg);
         opt_sync = *optarg;
