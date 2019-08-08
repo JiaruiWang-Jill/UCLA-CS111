@@ -212,7 +212,7 @@ int main(int argc, char *argv[]) {
   // create test name
   sprintf(test_name, "list-%s-%s", yield_option_str, sync_option_str);
   printf("%s,%lu,%lu,%lu,%ld,%lld,%lld,%lld\n", test_name, thread_num, iter_num,
-         list_num, op_num, runtime, runtime / op_num, total_lock_time);
+         list_num, op_num, runtime, runtime / op_num, total_lock_time / op_num);
 
   /* free memory */
   free(threads);
@@ -278,10 +278,8 @@ void thread_op(void *tid_) {
       fprintf(stderr, "The expected list element is not found in the list\n");
       exit(EXIT_WRONG_RESULT);
     }
-    unlock_list(list_i);
 
     // delete the element from the list
-    lock_list(list_i, tid);
     if (SortedList_delete(rslt) != 0) {
       fprintf(stderr, "Fail to delete element\n");
       exit(EXIT_WRONG_RESULT);
@@ -306,14 +304,21 @@ void initialize_locks() {
 void lock_list(size_t list_i, size_t tid) {
   struct timespec lock_start_time, lock_finish_time;
 
-  _c(clock_gettime(CLOCK_MONOTONIC, &lock_start_time),
-     "Failed to record the start time");
-  if (opt_sync == 'm') pthread_mutex_lock(&(mutexes[list_i]));
-  if (opt_sync == 's')
+  if (opt_sync == 'm') {
+    _c(clock_gettime(CLOCK_MONOTONIC, &lock_start_time),
+       "Failed to record the start time");
+    pthread_mutex_lock(&(mutexes[list_i]));
+    _c(clock_gettime(CLOCK_MONOTONIC, &lock_finish_time),
+       "Failed to record the finish time");
+  }
+  if (opt_sync == 's') {
+    _c(clock_gettime(CLOCK_MONOTONIC, &lock_start_time),
+       "Failed to record the start time");
     while (__sync_lock_test_and_set(&spin_locks[list_i], 1))
       ;
-  _c(clock_gettime(CLOCK_MONOTONIC, &lock_finish_time),
-     "Failed to record the finish time");
+    _c(clock_gettime(CLOCK_MONOTONIC, &lock_finish_time),
+       "Failed to record the finish time");
+  }
   lock_time[tid] += diff_time(&lock_start_time, &lock_finish_time);
 }
 
