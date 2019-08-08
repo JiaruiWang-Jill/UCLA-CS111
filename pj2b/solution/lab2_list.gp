@@ -18,7 +18,7 @@
 #	                synchronized list operations.
 #	lab2b_2.png ... mean time per mutex wait and mean time per operation for
 #	                mutex-synchronized list operations.
-# lab2b_3.png ... successful iterations vs. number of threads for each 
+# lab2b_3.png ... successful iterations vs. number of threads for each
 #                 synchronization method.
 # lab2b_4.png ... throughput vs. number of threads for mutex synchronized
 #                 partitioned lists.

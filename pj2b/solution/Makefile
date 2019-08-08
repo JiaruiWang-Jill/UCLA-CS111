@@ -10,6 +10,10 @@ tests: lab2_list
 	-./tests_list.sh > lab2_list.csv
 
 profile: tests
+	LD_PRELOAD=/lib64/libprofiler.so
+	CPUPROFILE=./raw.gperf ./lab2_list --iterations=1000 --threads=12 --sync=s
+	pprof --text ./lab2_list ./raw.gperf > profile.out
+	pprof --list=thread_op ./lab2_list ./raw.gperf >> profile.out
 
 graphs: tests
 
