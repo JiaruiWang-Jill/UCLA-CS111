@@ -16,21 +16,21 @@ LIST="./lab2_list"
 # mean time per mutex wait and mean time per operation for mutex-synchronized
 # list operations.
 for t in 1 2 4 8 12 16 24; do
-  $LIST --threads=$t --iterations=1000 --sync=m
-  $LIST --threads=$t --iterations=1000 --sync=s
+  $LIST --threads=$t --iterations=1000 --sync=m >> lab2b_list_12.csv
+  $LIST --threads=$t --iterations=1000 --sync=s >> lab2b_list_12.csv
 done
 
 # lab2b_3.png
 # successful iterations vs. number of threads for each synchronization method.
 for t in 1 4 8 12 16; do
   for i in 1 2 4 8 16; do
-    $LIST --list=4 --threads=$t --iterations=$i --yield=id
+    $LIST --list=4 --threads=$t --iterations=$i --yield=id >> lab2b_list_3.csv
   done
 done
 for t in 1 4 8 12 16; do
   for i in 10 20 40 80; do
     for s in s m; do
-      $LIST --list=4 --threads=$t --iterations=$i --sync=$s --yield=id
+      $LIST --list=4 --threads=$t --iterations=$i --sync=$s --yield=id >> lab2b_list_3.csv
     done
   done
 done
@@ -39,7 +39,7 @@ done
 # throughput vs. number of threads for mutex synchronized partitioned lists.
 for t in 1 2 4 8 12; do
   for l in 1 4 8 16; do
-    $LIST --list=$l --threads=$t --sync=m --iterations=1000
+    $LIST --list=$l --threads=$t --sync=m --iterations=1000 >> lab2b_list_4.csv
   done
 done
 
@@ -47,7 +47,7 @@ done
 # throughput vs. number of threads for spin-lock-synchronized partitioned lists.
 for t in 1 2 4 8 12; do
   for l in 1 4 8 16; do
-    $LIST --list=$l --threads=$t --sync=s --iterations=1000
+    $LIST --list=$l --threads=$t --sync=s --iterations=1000 >> lab2b_list_5.csv
   done
 done
 

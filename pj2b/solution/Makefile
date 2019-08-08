@@ -7,7 +7,9 @@ build: lab2_list.c SortedList.c
 	$(CC) $(CFLAGS) -g -pthread lab2_list.c SortedList.c -o lab2_list
 
 tests: lab2_list
-	-./tests_list.sh > lab2_list.csv
+	rm *.csv
+	-./tests_list.sh
+	cat *.csv > lab2b_list.csv
 
 profile: tests
 	LD_PRELOAD=/lib64/libprofiler.so
