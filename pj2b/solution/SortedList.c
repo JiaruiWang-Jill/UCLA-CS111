@@ -21,16 +21,12 @@ void SortedList_insert(SortedList_t *list, SortedListElement_t *elem) {
     fprintf(stderr, "%s: the given list is NULL\n", ERR_PROMPT);
     exit(EXIT_FAILURE);
   }
-  if (list->key != NULL) {
-    fprintf(stderr, "%s: the given head is not a head\n", ERR_PROMPT);
-    exit(EXIT_FAILURE);
-  }
   if (elem == NULL) {
     fprintf(stderr, "%s: the given element is NULL\n", ERR_PROMPT);
     exit(EXIT_FAILURE);
   }
-  if (list->next == NULL || list->prev == NULL) {
-    fprintf(stderr, "%s: the given list is a bad list head\n", ERR_PROMPT);
+  if (list->next == NULL || list->prev == NULL || list->key != NULL) {
+    fprintf(stderr, "%s: the given list head is bad\n", ERR_PROMPT);
     exit(EXIT_FAILURE);
   }
 

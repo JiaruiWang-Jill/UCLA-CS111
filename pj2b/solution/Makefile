@@ -2,10 +2,9 @@ CC=gcc
 CFLAGS=-Wall -Wextra
 
 .PHONY: build tests profile graphs dist clean
-.PHONY: $(TESTS)
 
 build: lab2_list.c SortedList.c
-	$(CC) $(CFLAGS) -pthread lab2_list.c SortedList.c -o lab2_list
+	$(CC) $(CFLAGS) -g -pthread lab2_list.c SortedList.c -o lab2_list
 
 tests: lab2_list
 	-./tests_list.sh > lab2_list.csv
