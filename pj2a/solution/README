@@ -62,11 +62,23 @@ QUESTION 2.1.4 - costs of serialization:
 
 QUESTION 2.2.1 - scalability of Mutex
   Compare the variation in time per mutex-protected operation vs the number of
+  Comment on the relative rates of increase and differences in the shapes of the
+  curves, and offer an explanation for these differences.
     threads in Part-1 (adds) and Part-2 (sorted lists). Comment on the general
     shapes of the curves, and explain why they have this shape.
-    > In Part-1 (adds) the curve curve
-  Comment on the relative rates of increase and differences in the shapes of the curves, and offer an explanation for these differences.
+    > In Part-1 (adds) the curve slightly goes up while in Part-2 (sorted lists)
+    > the curve remains mostly constant. The reason is that for Part-1 is
+    > editing the same shared variable while part two is not, allowing a
+    > relatively constant performance.
 
 QUESTION 2.2.2 - scalability of spin locks
-  Compare the variation in time per protected operation vs the number of threads for list operations protected by Mutex vs Spin locks. Comment on the general shapes of the curves, and explain why they have this shape.
-  Comment on the relative rates of increase and differences in the shapes of the curves, and offer an explanation for these differences.
+  Compare the variation in time per protected operation vs the number of threads
+  for list operations protected by Mutex vs Spin locks. Comment on the general
+    shapes of the curves, and explain why they have this shape.
+  Comment on the relative rates of increase and differences in the shapes of the
+  curves, and offer an explanation for these differences.
+  > spin-lock grows quickly while mutex locks mostly remains constant. That is
+  > because spin-lock in general is in efficient, the more spin-lock waiting
+  > there is, the slower it gets. However, mutex does not really involve the 
+  > CPU wasting spin operation.
+
