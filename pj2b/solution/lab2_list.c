@@ -200,12 +200,14 @@ int main(int argc, char *argv[]) {
   }
 
   long long total_lock_time = 0;
-  for (size_t i = 0; i < thread_num; i++) {
-    if (lock_time[i] < 0) {
-      fprintf(stderr, "The lock time cannot be negative\n");
-      exit(EXIT_FAILURE);
+  if (opt_sync == 's' || opt_sync == 'm') {
+    for (size_t i = 0; i < thread_num; i++) {
+      if (lock_time[i] < 0) {
+        fprintf(stderr, "The lock time cannot be negative\n");
+        exit(EXIT_FAILURE);
+      }
+      total_lock_time += lock_time[i];
     }
-    total_lock_time += lock_time[i];
   }
   long op_num = thread_num * iter_num * 3;
 
@@ -303,7 +305,6 @@ void initialize_locks() {
 
 void lock_list(size_t list_i, size_t tid) {
   struct timespec lock_start_time, lock_finish_time;
-
   if (opt_sync == 'm') {
     _c(clock_gettime(CLOCK_MONOTONIC, &lock_start_time),
        "Failed to record the start time");
@@ -319,7 +320,10 @@ void lock_list(size_t list_i, size_t tid) {
     _c(clock_gettime(CLOCK_MONOTONIC, &lock_finish_time),
        "Failed to record the finish time");
   }
-  lock_time[tid] += diff_time(&lock_start_time, &lock_finish_time);
+  if (opt_sync == 'm' || opt_sync == 's') {
+    long long lock_cost = diff_time(&lock_start_time, &lock_finish_time);
+    lock_time[tid] += lock_cost;
+  }
 }
 
 void unlock_list(size_t list_i) {
