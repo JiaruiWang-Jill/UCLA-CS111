@@ -318,8 +318,13 @@ void read_group(int group, int total_groups) {
   uint32_t descblock = 0;
   if (block_size == 1024) {
     descblock = 2;
-  } else {
+  } else if (block_size > 1024) {
     descblock = 1;
+  } else {
+    fprintf(stderr,
+            "Block size cannot be less than 1024, yet here it is. Something's "
+            "wrong.\n");
+    exit(EXIT_FAILURE);
   }
 
   unsigned long offset = block_size * descblock + 32 * group;
