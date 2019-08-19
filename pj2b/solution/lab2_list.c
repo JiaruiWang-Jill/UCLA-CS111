@@ -21,6 +21,8 @@
 #define PROGRAM_NAME "lab2-list"
 #define AUTHORS proper_name("Qingwei Zeng")
 
+char const program_name[] = PROGRAM_NAME;
+
 #define THREADS_SHORT_OPTION 256
 #define ITERATIONS_SHORT_OPTION 257
 #define YIELD_SHORT_OPTION 258
@@ -35,9 +37,9 @@
 
 const int BILLION = 1000000000;
 
-size_t thread_num = 1;  // number of parallel threads, defaults to 1
-size_t iter_num = 1;    // number of iterations, defaults to 1
-size_t list_num = 1;    // number of sublists
+size_t thread_num = 1; // number of parallel threads, defaults to 1
+size_t iter_num = 1;   // number of iterations, defaults to 1
+size_t list_num = 1;   // number of sublists
 long list_len = 0;
 
 char opt_sync;
@@ -54,8 +56,6 @@ SortedListElement_t *elems;
 
 long long *lock_time;
 struct timespec start_time, finish_time;
-
-char const program_name[] = PROGRAM_NAME;
 
 /* system call check */
 void _c(int ret, char *errmsg);
@@ -93,44 +93,44 @@ int main(int argc, char *argv[]) {
   int optc;
   while ((optc = getopt_long(argc, argv, ":", long_opts, NULL)) != -1) {
     switch (optc) {
-      case THREADS_SHORT_OPTION:
-        thread_num = atoi(optarg);
-        break;
-      case ITERATIONS_SHORT_OPTION:
-        iter_num = atoi(optarg);
-        break;
-      case LISTS_SHORT_OPTION:
-        list_num = atoi(optarg);
-        break;
-      case YIELD_SHORT_OPTION:
-        for (size_t i = 0; i < strlen(optarg); i++) {
-          switch (optarg[i]) {
-            case 'i':
-              opt_yield |= INSERT_YIELD;
-              strcpy(yield_option_str, optarg);
-              break;
-            case 'd':
-              opt_yield |= DELETE_YIELD;
-              strcpy(yield_option_str, optarg);
-              break;
-            case 'l':
-              opt_yield |= LOOKUP_YIELD;
-              strcpy(yield_option_str, optarg);
-              break;
-            default:
-              fprintf(stderr, "Invalid yield option argument\n");
-          }
+    case THREADS_SHORT_OPTION:
+      thread_num = atoi(optarg);
+      break;
+    case ITERATIONS_SHORT_OPTION:
+      iter_num = atoi(optarg);
+      break;
+    case LISTS_SHORT_OPTION:
+      list_num = atoi(optarg);
+      break;
+    case YIELD_SHORT_OPTION:
+      for (size_t i = 0; i < strlen(optarg); i++) {
+        switch (optarg[i]) {
+        case 'i':
+          opt_yield |= INSERT_YIELD;
+          strcpy(yield_option_str, optarg);
+          break;
+        case 'd':
+          opt_yield |= DELETE_YIELD;
+          strcpy(yield_option_str, optarg);
+          break;
+        case 'l':
+          opt_yield |= LOOKUP_YIELD;
+          strcpy(yield_option_str, optarg);
+          break;
+        default:
+          fprintf(stderr, "Invalid yield option argument\n");
         }
-        break;
-      case SYNC_SHORT_OPTION:
-        check_opt_sync(optarg);
-        opt_sync = *optarg;
-        sync_option_str[0] = opt_sync;
-        sync_option_str[1] = '\0';
-        break;
-      default:
-        fputs("Invalid arguments.\n", stderr);
-        usage();
+      }
+      break;
+    case SYNC_SHORT_OPTION:
+      check_opt_sync(optarg);
+      opt_sync = *optarg;
+      sync_option_str[0] = opt_sync;
+      sync_option_str[1] = '\0';
+      break;
+    default:
+      fputs("Invalid arguments.\n", stderr);
+      usage();
     }
   }
 
@@ -169,7 +169,8 @@ int main(int argc, char *argv[]) {
   // initialize thread indexes
   int *ti;
   _m(ti = malloc(sizeof(int) * thread_num), "thread indices");
-  for (size_t i = 0; i < thread_num; i++) ti[i] = i;
+  for (size_t i = 0; i < thread_num; i++)
+    ti[i] = i;
   /* finish allocating memory */
 
   /* start threads */
@@ -222,7 +223,8 @@ int main(int argc, char *argv[]) {
   free(mutexes);
   free(spin_locks);
   free(lock_time);
-  for (size_t i = 0; i < elem_num; i++) free((void *)elems[i].key);
+  for (size_t i = 0; i < elem_num; i++)
+    free((void *)elems[i].key);
   free(elems);
   free(lists);
 
@@ -238,7 +240,7 @@ void check_opt_sync(char *optarg) {
 
 void generate_random_key(char *key) {
   for (unsigned long i = 0; i < KEY_LENGTH - 1; i++)
-    key[i] = rand() % 94 + 33;  // printable character range
+    key[i] = rand() % 94 + 33; // printable character range
   key[KEY_LENGTH - 1] = '\0';
 }
 
@@ -327,13 +329,14 @@ void lock_list(size_t list_i, size_t tid) {
 }
 
 void unlock_list(size_t list_i) {
-  if (opt_sync == 'm') pthread_mutex_unlock(&(mutexes[list_i]));
-  if (opt_sync == 's') __sync_lock_release(&spin_locks[list_i]);
+  if (opt_sync == 'm')
+    pthread_mutex_unlock(&(mutexes[list_i]));
+  if (opt_sync == 's')
+    __sync_lock_release(&spin_locks[list_i]);
 }
 
 void usage() {
-  fprintf(stderr,
-          "\n\
+  fprintf(stderr, "\n\
 Usage: %s\n\
        %s --threads=THREADNUM\n\
        %s --iterations=ITERNUM\n\
@@ -344,15 +347,14 @@ Usage: %s\n\
 ",
           program_name, program_name, program_name, program_name, program_name,
           program_name);
-  fputs(
-      "\
+  fputs("\
 --threads=THREADNUM            number of threads to use, defaults to 1\n\
 --iterations=ITERNUM           number of iterations to run, defaults to 1\n\
 --lists=LISTNUM                number of lists to use, defaults to 1\n\
 --yield=[i|d|l|id|il|dl|idl]   yield mode, i: insert, d: delete, l: lookup\n\
 --sync=[m|s]                   sync mode, m: mutex, s: spin\n\
 ",
-      stderr);
+        stderr);
   exit(EXIT_FAILURE);
 }
 
@@ -362,14 +364,15 @@ long long diff_time(struct timespec *start, struct timespec *end) {
 }
 
 void _c(int ret, char *errmsg) {
-  if (ret != -1) return;  // syscall suceeded
+  if (ret != -1)
+    return; // syscall suceeded
   fprintf(stderr, "%s: %s. errno %d\n", errmsg, strerror(errno), errno);
   exit(EXIT_FAILURE);
 }
 
 void _m(void *ret, char *name) {
-  if (ret != NULL) return;  // memory allocation suceeded
+  if (ret != NULL)
+    return; // memory allocation suceeded
   fprintf(stderr, "Failed to allocate memory for %s.\n", name);
   exit(EXIT_FAILURE);
 }
-

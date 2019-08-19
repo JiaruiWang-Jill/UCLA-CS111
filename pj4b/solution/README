@@ -1,0 +1,12 @@
+NAME: Qingwei Zeng
+EMAIL: zenn@ucla.edu
+ID: 005181694
+SLIPDAYS: 0
+
+The program 'pj4b' includes the following files:
+- lab4b.c
+- Makefile
+- README
+
+My temperature sensor, despite being inserted in the correct port, cannot be
+initiated. Hence some test has to be done on my fellow student's Beaglebone.
