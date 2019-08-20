@@ -16,13 +16,22 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifndef EXT2_FS_H
+#define EXT2_FS_H
 #include "ext2_fs.h"
+#endif
+
 #include "lab3a.h"
 
 #define PROGRAM_NAME "lab3a"
 #define AUTHORS proper_name("Qingwei Zeng")
 
 char const program_name[] = PROGRAM_NAME;
+
+/* global variables */
+int fs_fd;
+superblock_t super_block;
+__u32 block_size;
 
 /* returns the offset for a block number */
 unsigned long block_offset(unsigned int block) {
@@ -35,7 +44,7 @@ void free_blocks(int group, unsigned int block) {
   char *bytes = (char *)malloc(block_size);
   unsigned long offset = block_offset(block);
   unsigned int curr =
-      superblock.s_first_data_block + group * superblock.s_blocks_per_group;
+      super_block.s_first_data_block + group * super_block.s_blocks_per_group;
   pread(fs_fd, bytes, block_size, offset);
 
   unsigned int i, j;
@@ -111,7 +120,7 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
   }
 
   unsigned int num_blocks =
-      2 * (inode.i_blocks / (2 << superblock.s_log_block_size));
+      2 * (inode.i_blocks / (2 << super_block.s_log_block_size));
 
   fprintf(stdout, "INODE,%d,%c,%o,%d,%d,%d,",
           inode_num,             // inode number
@@ -287,11 +296,11 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
 
 /* for each inode, print if free; if not, print inode summary */
 void read_inode_bitmap(int group, int block, int inode_table_id) {
-  int num_bytes = superblock.s_inodes_per_group / 8;
+  int num_bytes = super_block.s_inodes_per_group / 8;
   char *bytes = (char *)malloc(num_bytes);
 
   unsigned long offset = block_offset(block);
-  unsigned int curr = group * superblock.s_inodes_per_group + 1;
+  unsigned int curr = group * super_block.s_inodes_per_group + 1;
   unsigned int start = curr;
   pread(fs_fd, bytes, num_bytes, offset);
 
@@ -310,60 +319,6 @@ void read_inode_bitmap(int group, int block, int inode_table_id) {
     }
   }
   free(bytes);
-}
-
-/* for each group, read bitmaps for blocks and inodes */
-void read_group(int group, int total_groups) {
-  struct ext2_group_desc group_desc;
-  uint32_t descblock = 0;
-  if (block_size == 1024) {
-    descblock = 2;
-  } else if (block_size > 1024) {
-    descblock = 1;
-  } else {
-    fprintf(stderr,
-            "Block size cannot be less than 1024, yet here it is. Something's "
-            "wrong.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  unsigned long offset = block_size * descblock + 32 * group;
-  pread(fs_fd, &group_desc, sizeof(group_desc), offset);
-
-  unsigned int num_blocks_in_group = superblock.s_blocks_per_group;
-  if (group == total_groups - 1) {
-    num_blocks_in_group = superblock.s_blocks_count -
-                          (superblock.s_blocks_per_group * (total_groups - 1));
-  }
-
-  unsigned int num_inodes_in_group = superblock.s_inodes_per_group;
-  if (group == total_groups - 1) {
-    num_inodes_in_group = superblock.s_inodes_count -
-                          (superblock.s_inodes_per_group * (total_groups - 1));
-  }
-
-  // TODO: fix comments
-  printf(
-      GROUP_SUMMARY,
-      group,                            // group number
-      num_blocks_in_group,              // total number of blocks in this group
-      num_inodes_in_group,              // total number of inodes
-      group_desc.bg_free_blocks_count,  // number of free blocks
-      group_desc.bg_free_inodes_count,  // number of free inodes
-      group_desc
-          .bg_block_bitmap,  // block number of free block bitmap for this group
-      group_desc
-          .bg_inode_bitmap,  // block number of free inode bitmap for this group
-      group_desc.bg_inode_table  // block number of first block of i-nodes in
-                                 // this group
-  );
-
-  unsigned int block_bitmap = group_desc.bg_block_bitmap;
-  free_blocks(group, block_bitmap);
-
-  unsigned int inode_bitmap = group_desc.bg_inode_bitmap;
-  unsigned int inode_table = group_desc.bg_inode_table;
-  read_inode_bitmap(group, inode_bitmap, inode_table);
 }
 
 /** usage
@@ -387,28 +342,70 @@ int main(int argc, char *argv[]) {
   // Open the file system image
   _c(fs_fd = open(argv[1], O_RDONLY),
      "Failed to open the given file system image file");
-  // Intialize superblock structure
-  _c(pread(fs_fd, &superblock, sizeof(superblock), BOOT_BLOCK_SIZE),
+  // Intialize super_block structure
+  _c(pread(fs_fd, &super_block, sizeof(super_block), BOOT_BLOCK_SIZE),
      "Failed to read the super block");
-  block_size = EXT2_MIN_BLOCK_SIZE << superblock.s_log_block_size;
-  // TODO: replace with print super block summary function
-  // Print out superblock
-  printf(SUPERBLOCK_SUMMARY,
-         superblock.s_blocks_count,      // total number of blocks (decimal)
-         superblock.s_inodes_count,      // total number of inodes (decimal)
-         block_size,                     // block size (in bytes, decimal)
-         superblock.s_inode_size,        // i-node size (in bytes, decimal)
-         superblock.s_blocks_per_group,  // blocks per group (decimal)
-         superblock.s_inodes_per_group,  // inodes per group (decimal)
-         superblock.s_first_ino          // first non-reserved inode (decimal)
+  block_size = EXT2_MIN_BLOCK_SIZE << super_block.s_log_block_size;
+  // Print super block summary
+  printf("SUPERBLOCK,%d,%d,%d,%d,%d,%d,%d\n",
+         super_block.s_blocks_count,      // total number of blocks (decimal)
+         super_block.s_inodes_count,      // total number of inodes (decimal)
+         block_size,                      // block size (in bytes, decimal)
+         super_block.s_inode_size,        // i-node size (in bytes, decimal)
+         super_block.s_blocks_per_group,  // blocks per group (decimal)
+         super_block.s_inodes_per_group,  // inodes per group (decimal)
+         super_block.s_first_ino          // first non-reserved inode (decimal)
   );
 
-  __u32 group_num =
-      superblock.s_blocks_count % superblock.s_blocks_per_group == 0
-          ? superblock.s_blocks_count / superblock.s_blocks_per_group
-          : superblock.s_blocks_count / superblock.s_blocks_per_group + 1;
+  // Calculate number of block groups on the disk
+  __u32 group_count =
+      1 + (super_block.s_blocks_count - 1) / super_block.s_blocks_per_group;
+  // Locate the group descriptors
+  uint32_t desc_block;
+  if (block_size < 1024) {
+    fprintf(stderr, "Block size can't be less than 1024. Something's wrong.\n");
+    exit(EXIT_FAILURE);
+  }
+  desc_block = block_size > 1024 ? 1 : 2;
+  // Analyze each block group
+  group_descriptor_t group_desc;
+  for (__u32 group_idx = 0; group_idx < group_count; group_idx++) {
+    // Initialize the group descriptor
+    pread(fs_fd, &group_desc, sizeof(group_desc),
+          block_size * desc_block + group_idx * sizeof(group_desc));
+    // Calculate number of block in this group
+    __u32 num_inodes_in_group, num_blocks_in_group;
+    if (group_idx == group_count - 1) {
+      num_blocks_in_group = super_block.s_blocks_count -
+                            super_block.s_blocks_per_group * (group_count - 1);
+      num_inodes_in_group = super_block.s_inodes_count -
+                            super_block.s_inodes_per_group * (group_count - 1);
+    } else {
+      num_blocks_in_group = super_block.s_blocks_per_group;
+      num_inodes_in_group = super_block.s_inodes_per_group;
+    }
+    // Print group summary
+    printf(
+        "GROUP,%d,%d,%d,%d,%d,%d,%d,%d\n",
+        group_idx,            // group number (decimal, starting from zero)
+        num_blocks_in_group,  // total number of blocks in this group (decimal)
+        num_inodes_in_group,  // total number of inodes (decimal)
+        group_desc.bg_free_blocks_count,  // number of free blocks (decimal)
+        group_desc.bg_free_inodes_count,  // number of free inodes (decimal)
+        // block number of free block bitmap for this group (decimal)
+        group_desc.bg_block_bitmap,
+        // block number of free inode bitmap for this group (decimal)
+        group_desc.bg_inode_bitmap,
+        // block number of first block of i-nodes in this group (decimal)
+        group_desc.bg_inode_table);
 
-  for (__u32 i = 0; i < group_num; i++) read_group(i, group_num);
+    __u32 block_bitmap = group_desc.bg_block_bitmap;
+    free_blocks(group_idx, block_bitmap);
+
+    unsigned int inode_bitmap = group_desc.bg_inode_bitmap;
+    unsigned int inode_table = group_desc.bg_inode_table;
+    read_inode_bitmap(group_idx, inode_bitmap, inode_table);
+  }
 
   return 0;
 }
