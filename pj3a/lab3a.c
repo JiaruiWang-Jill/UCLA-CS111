@@ -9,10 +9,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stats.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -31,35 +33,33 @@ char const program_name[] = PROGRAM_NAME;
 /* global variables */
 int fs_fd;
 superblock_t super_block;
-__u32 block_size;
+__u32 block_size, descriptor_block_index, group_count;
 
-/* returns the offset for a block number */
-unsigned long block_offset(unsigned int block) {
-  return BOOT_BLOCK_SIZE + (block - 1) * block_size;
+unsigned long _offset(__u32 base, __u32 index, __u32 scale) {
+  return base + index * scale;
 }
 
-/* for each free block, print the number of the free block */
-void free_blocks(int group, unsigned int block) {
-  // 1 means 'used', 0 means 'free'
-  char *bytes = (char *)malloc(block_size);
-  unsigned long offset = block_offset(block);
-  unsigned int curr =
-      super_block.s_first_data_block + group * super_block.s_blocks_per_group;
-  pread(fs_fd, bytes, block_size, offset);
+/**
+ * system call error checker
+ *
+ * Check if the system call is successful. If not, prints out the given error
+ * message as well as the error message related to the errno. Then, exits with
+ * EXIT_FAILURE status.
+ */
+void _c(int ret, char *errmsg);
 
-  unsigned int i, j;
-  for (i = 0; i < block_size; i++) {
-    char x = bytes[i];
-    for (j = 0; j < 8; j++) {
-      int used = 1 & x;
-      if (!used) {
-        fprintf(stdout, "BFREE,%d\n", curr);
-      }
-      x >>= 1;
-      curr++;
-    }
-  }
-  free(bytes);
+/**
+ * memory allocation error checker
+ *
+ * Check if the memory allocation is successful. If not, prints out the given
+ * error message. Then exits with EXIT_FAILURE status.
+ */
+void _m(void *ret, char *name);
+
+unsigned int b_to_B(unsigned int num_bits) { return num_bits / 8 + 1; }
+
+unsigned long block_offset(__u32 block_index) {
+  return _offset(BOOT_BLOCK_SIZE, block_index - 1, block_size);
 }
 
 /* store the time in the format mm/dd/yy hh:mm:ss, GMT
@@ -83,13 +83,13 @@ void read_dir_entry(unsigned int parent_inode, unsigned int block_num) {
     pread(fs_fd, &dir_entry, sizeof(dir_entry), offset + num_bytes);
     if (dir_entry.inode != 0) {  // entry is not empty
       memset(&dir_entry.name[dir_entry.name_len], 0, 256 - dir_entry.name_len);
-      fprintf(stdout, "DIRENT,%d,%d,%d,%d,%d,'%s'\n",
-              parent_inode,        // parent inode number
-              num_bytes,           // logical byte offset
-              dir_entry.inode,     // inode number of the referenced file
-              dir_entry.rec_len,   // entry length
-              dir_entry.name_len,  // name length
-              dir_entry.name       // name, string, surrounded by single-quotes
+      printf("DIRENT,%d,%d,%d,%d,%d,'%s'\n",
+             parent_inode,        // parent inode number
+             num_bytes,           // logical byte offset
+             dir_entry.inode,     // inode number of the referenced file
+             dir_entry.rec_len,   // entry length
+             dir_entry.name_len,  // name length
+             dir_entry.name       // name, string, surrounded by single-quotes
       );
     }
     num_bytes += dir_entry.rec_len;
@@ -102,51 +102,44 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
   struct ext2_inode inode;
 
   unsigned long offset = block_offset(inode_table_id) + index * sizeof(inode);
-  pread(fs_fd, &inode, sizeof(inode), offset);
+  _c(pread(fs_fd, &inode, sizeof(inode), offset), "Failed to read inode");
 
-  if (inode.i_mode == 0 || inode.i_links_count == 0) {
-    return;
-  }
+  // Check if inode is actually freed
+  if (inode.i_mode == 0 || inode.i_links_count == 0) return;
 
   char filetype = '?';
-  // get bits that determine the file type
-  uint16_t file_val = (inode.i_mode >> 12) << 12;
-  if (file_val == 0xa000) {  // symbolic link
-    filetype = 's';
-  } else if (file_val == 0x8000) {  // regular file
-    filetype = 'f';
-  } else if (file_val == 0x4000) {  // directory
-    filetype = 'd';
-  }
+  if (S_ISLNK(inode.i_mode)) filetype = 's';
+  if (S_ISREG(inode.i_mode)) filetype = 'f';
+  if (S_ISDIR(inode.i_mode)) filetype = 'd';
 
   unsigned int num_blocks =
       2 * (inode.i_blocks / (2 << super_block.s_log_block_size));
 
-  fprintf(stdout, "INODE,%d,%c,%o,%d,%d,%d,",
-          inode_num,             // inode number
-          filetype,              // filetype
-          inode.i_mode & 0xFFF,  // mode, low order 12-bits
-          inode.i_uid,           // owner
-          inode.i_gid,           // group
-          inode.i_links_count    // link count
+  printf("INODE,%d,%c,%o,%d,%d,%d,",
+         inode_num,             // inode number
+         filetype,              // filetype
+         inode.i_mode & 0xFFF,  // mode, low order 12-bits
+         inode.i_uid,           // owner
+         inode.i_gid,           // group
+         inode.i_links_count    // link count
   );
 
   char ctime[20], mtime[20], atime[20];
   get_time(inode.i_ctime, ctime);  // creation time
   get_time(inode.i_mtime, mtime);  // modification time
   get_time(inode.i_atime, atime);  // access time
-  fprintf(stdout, "%s,%s,%s,", ctime, mtime, atime);
+  printf("%s,%s,%s,", ctime, mtime, atime);
 
-  fprintf(stdout, "%d,%d",
-          inode.i_size,  // file size
-          num_blocks     // number of blocks
+  printf("%d,%d",
+         inode.i_size,  // file size
+         num_blocks     // number of blocks
   );
 
   unsigned int i;
   for (i = 0; i < 15; i++) {  // block addresses
-    fprintf(stdout, ",%d", inode.i_block[i]);
+    printf(",%d", inode.i_block[i]);
   }
-  fprintf(stdout, "\n");
+  printf("\n");
 
   // if the filetype is a directory, need to create a directory entry
   for (i = 0; i < 12; i++) {  // direct entries
@@ -169,8 +162,8 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
         if (filetype == 'd') {
           read_dir_entry(inode_num, block_ptrs[j]);
         }
-        fprintf(
-            stdout, "INDIRECT,%d,%d,%d,%d,%d\n",
+        printf(
+            "INDIRECT,%d,%d,%d,%d,%d\n",
             inode_num,          // inode number
             1,                  // level of indirection
             12 + j,             // logical block offset
@@ -193,8 +186,8 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
     unsigned int j;
     for (j = 0; j < num_ptrs; j++) {
       if (indir_block_ptrs[j] != 0) {
-        fprintf(
-            stdout, "INDIRECT,%d,%d,%d,%d,%d\n",
+        printf(
+            "INDIRECT,%d,%d,%d,%d,%d\n",
             inode_num,           // inode number
             2,                   // level of indirection
             256 + 12 + j,        // logical block offset
@@ -213,13 +206,13 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
             if (filetype == 'd') {
               read_dir_entry(inode_num, block_ptrs[k]);
             }
-            fprintf(stdout, "INDIRECT,%d,%d,%d,%d,%d\n",
-                    inode_num,            // inode number
-                    1,                    // level of indirection
-                    256 + 12 + k,         // logical block offset
-                    indir_block_ptrs[j],  // block number of indirect block
-                    // being scanned
-                    block_ptrs[k]  // block number of reference block
+            printf("INDIRECT,%d,%d,%d,%d,%d\n",
+                   inode_num,            // inode number
+                   1,                    // level of indirection
+                   256 + 12 + k,         // logical block offset
+                   indir_block_ptrs[j],  // block number of indirect block
+                   // being scanned
+                   block_ptrs[k]  // block number of reference block
             );
           }
         }
@@ -240,8 +233,8 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
     unsigned int j;
     for (j = 0; j < num_ptrs; j++) {
       if (indir2_block_ptrs[j] != 0) {
-        fprintf(
-            stdout, "INDIRECT,%d,%d,%d,%d,%d\n",
+        printf(
+            "INDIRECT,%d,%d,%d,%d,%d\n",
             inode_num,             // inode number
             3,                     // level of indirection
             65536 + 256 + 12 + j,  // logical block offset
@@ -256,13 +249,13 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
         unsigned int k;
         for (k = 0; k < num_ptrs; k++) {
           if (indir_block_ptrs[k] != 0) {
-            fprintf(stdout, "INDIRECT,%d,%d,%d,%d,%d\n",
-                    inode_num,             // inode number
-                    2,                     // level of indirection
-                    65536 + 256 + 12 + k,  // logical block offset
-                    indir2_block_ptrs[j],  // block number of indirect block
-                    // being scanned
-                    indir_block_ptrs[k]  // block number of reference block
+            printf("INDIRECT,%d,%d,%d,%d,%d\n",
+                   inode_num,             // inode number
+                   2,                     // level of indirection
+                   65536 + 256 + 12 + k,  // logical block offset
+                   indir2_block_ptrs[j],  // block number of indirect block
+                   // being scanned
+                   indir_block_ptrs[k]  // block number of reference block
             );
             uint32_t *block_ptrs = malloc(block_size);
             unsigned long indir_offset = block_offset(indir_block_ptrs[k]);
@@ -274,13 +267,13 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
                 if (filetype == 'd') {
                   read_dir_entry(inode_num, block_ptrs[l]);
                 }
-                fprintf(stdout, "INDIRECT,%d,%d,%d,%d,%d\n",
-                        inode_num,             // inode number
-                        1,                     // level of indirection
-                        65536 + 256 + 12 + l,  // logical block offset
-                        indir_block_ptrs[k],   // block number of indirect block
-                        // being scanned
-                        block_ptrs[l]  // block number of reference block
+                printf("INDIRECT,%d,%d,%d,%d,%d\n",
+                       inode_num,             // inode number
+                       1,                     // level of indirection
+                       65536 + 256 + 12 + l,  // logical block offset
+                       indir_block_ptrs[k],   // block number of indirect block
+                       // being scanned
+                       block_ptrs[l]  // block number of reference block
                 );
               }
             }
@@ -294,48 +287,102 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
   }
 }
 
-/* for each inode, print if free; if not, print inode summary */
-void read_inode_bitmap(int group, int block, int inode_table_id) {
-  int num_bytes = super_block.s_inodes_per_group / 8;
-  char *bytes = (char *)malloc(num_bytes);
-
-  unsigned long offset = block_offset(block);
-  unsigned int curr = group * super_block.s_inodes_per_group + 1;
-  unsigned int start = curr;
-  pread(fs_fd, bytes, num_bytes, offset);
-
-  int i, j;
-  for (i = 0; i < num_bytes; i++) {
-    char x = bytes[i];
-    for (j = 0; j < 8; j++) {
-      int used = 1 & x;
-      if (used) {  // inode is allocated
-        read_inode(inode_table_id, curr - start, curr);
-      } else {  // free inode
-        fprintf(stdout, "IFREE,%d\n", curr);
-      }
-      x >>= 1;
-      curr++;
-    }
-  }
-  free(bytes);
-}
-
-/** usage
+/**
+ * usage
+ *
  * prints out the usage of this function. Then exits with EXIT_FAILURE status.
  */
 void usage();
 
-/** system call error checker
- * prints out the given error message and the error message related to the
- * errno. Then exits with EXIT_FAILURE status.
- */
-void _c(int ret, char *errmsg);
+void analyze_group(__u32 group_index) {
+  char *block_bitmap, *inode_bitmap;
+  group_descriptor_t group_descriptor;
+  __u32 num_inodes_in_group, num_blocks_in_group;
+  __u32 inode_bitmap_size = b_to_B(super_block.s_inodes_per_group);
+
+  _m(inode_bitmap = (char *)malloc(inode_bitmap_size), "inode bitmap");
+  _m(block_bitmap = (char *)malloc(block_size), "block bitmap");
+  // Initialize the group descriptor for this group
+  _c(pread(fs_fd, &group_descriptor, sizeof(group_descriptor),
+           block_size * descriptor_block_index +
+               group_index * sizeof(group_descriptor)),
+     "Failed to read the group descriptor");
+
+  // Calculate number of block in this group
+  if (group_index == group_count - 1) {
+    num_blocks_in_group = super_block.s_blocks_count -
+                          super_block.s_blocks_per_group * (group_count - 1);
+    num_inodes_in_group = super_block.s_inodes_count -
+                          super_block.s_inodes_per_group * (group_count - 1);
+  } else {
+    num_blocks_in_group = super_block.s_blocks_per_group;
+    num_inodes_in_group = super_block.s_inodes_per_group;
+  }
+
+  // Print group summary
+  printf(
+      "GROUP,%d,%d,%d,%d,%d,%d,%d,%d\n",
+      group_index,          // group number (decimal, starting from zero)
+      num_blocks_in_group,  // total number of blocks in this group (decimal)
+      num_inodes_in_group,  // total number of inodes (decimal)
+      group_descriptor.bg_free_blocks_count,  // number of free blocks (decimal)
+      group_descriptor.bg_free_inodes_count,  // number of free inodes (decimal)
+      // block number of free block bitmap for this group (decimal)
+      group_descriptor.bg_block_bitmap,
+      // block number of free inode bitmap for this group (decimal)
+      group_descriptor.bg_inode_bitmap,
+      // block number of first block of i-nodes in this group (decimal)
+      group_descriptor.bg_inode_table);
+
+  // Read the block bitmap for this group
+  _c(pread(fs_fd, block_bitmap, block_size,
+           block_offset(group_descriptor.bg_block_bitmap)),
+     "Failed to read the block bitmap");
+
+  // Set block_index to the index of the first block in this group
+  __u32 block_index = _offset(super_block.s_first_data_block, group_index,
+                              super_block.s_blocks_per_group);
+  // Scan through the block bitmap bit by bit
+  for (__u32 i = 0; i < block_size; i++) {
+    char byte = block_bitmap[i];
+    for (short j = 0; j < BIT_PER_BYTE; j++) {
+      bool allocated = byte & 1;
+      if (!allocated) printf("BFREE,%d\n", block_index);
+      byte >>= 1;
+      block_index++;
+    }
+  }
+
+  __u32 group_inode_start =
+      _offset(1, group_index, super_block.s_inodes_per_group);
+  __u32 inode_index = group_inode_start;
+  _c(pread(fs_fd, inode_bitmap, inode_bitmap_size,
+           block_offset(group_descriptor.bg_inode_bitmap)),
+     "Failed to read the inode bitmap");
+
+  for (__u32 i = 0; i < inode_bitmap_size; i++) {
+    char byte = inode_bitmap[i];
+    for (int j = 0; j < BIT_PER_BYTE; j++) {
+      bool allocated = byte & 1;
+      if (allocated) {
+        read_inode(group_descriptor.bg_inode_table,
+                   inode_index - group_inode_start, inode_index);
+      } else
+        printf("IFREE,%d\n", inode_index);
+      byte >>= 1;
+      inode_index++;
+    }
+  }
+
+  // Free allocated memory
+  free(block_bitmap);
+  free(inode_bitmap);
+};
 
 int main(int argc, char *argv[]) {
   // Check the number of arguments; should be exactly 1
   if (argc != 2) {
-    fprintf(stderr, "The program takes exactly one argument, %d were given.\n",
+    fprintf(stderr, "The program takes exactly 1 argument, %d were given.\n",
             argc - 1);
     usage();
   }
@@ -358,56 +405,19 @@ int main(int argc, char *argv[]) {
   );
 
   // Calculate number of block groups on the disk
-  __u32 group_count =
+  group_count =
       1 + (super_block.s_blocks_count - 1) / super_block.s_blocks_per_group;
   // Locate the group descriptors
-  uint32_t desc_block;
   if (block_size < 1024) {
     fprintf(stderr, "Block size can't be less than 1024. Something's wrong.\n");
     exit(EXIT_FAILURE);
   }
-  desc_block = block_size > 1024 ? 1 : 2;
+  descriptor_block_index = block_size > 1024 ? 1 : 2;
   // Analyze each block group
-  group_descriptor_t group_desc;
-  for (__u32 group_idx = 0; group_idx < group_count; group_idx++) {
-    // Initialize the group descriptor
-    pread(fs_fd, &group_desc, sizeof(group_desc),
-          block_size * desc_block + group_idx * sizeof(group_desc));
-    // Calculate number of block in this group
-    __u32 num_inodes_in_group, num_blocks_in_group;
-    if (group_idx == group_count - 1) {
-      num_blocks_in_group = super_block.s_blocks_count -
-                            super_block.s_blocks_per_group * (group_count - 1);
-      num_inodes_in_group = super_block.s_inodes_count -
-                            super_block.s_inodes_per_group * (group_count - 1);
-    } else {
-      num_blocks_in_group = super_block.s_blocks_per_group;
-      num_inodes_in_group = super_block.s_inodes_per_group;
-    }
-    // Print group summary
-    printf(
-        "GROUP,%d,%d,%d,%d,%d,%d,%d,%d\n",
-        group_idx,            // group number (decimal, starting from zero)
-        num_blocks_in_group,  // total number of blocks in this group (decimal)
-        num_inodes_in_group,  // total number of inodes (decimal)
-        group_desc.bg_free_blocks_count,  // number of free blocks (decimal)
-        group_desc.bg_free_inodes_count,  // number of free inodes (decimal)
-        // block number of free block bitmap for this group (decimal)
-        group_desc.bg_block_bitmap,
-        // block number of free inode bitmap for this group (decimal)
-        group_desc.bg_inode_bitmap,
-        // block number of first block of i-nodes in this group (decimal)
-        group_desc.bg_inode_table);
+  for (__u32 group_index = 0; group_index < group_count; group_index++)
+    analyze_group(group_index);
 
-    __u32 block_bitmap = group_desc.bg_block_bitmap;
-    free_blocks(group_idx, block_bitmap);
-
-    unsigned int inode_bitmap = group_desc.bg_inode_bitmap;
-    unsigned int inode_table = group_desc.bg_inode_table;
-    read_inode_bitmap(group_idx, inode_bitmap, inode_table);
-  }
-
-  return 0;
+  exit(EXIT_SUCCESS);
 }
 
 void usage() {
@@ -431,3 +441,8 @@ void _c(int ret, char *errmsg) {
   exit(EXIT_FAILURE);
 }
 
+void _m(void *ret, char *name) {
+  if (ret != NULL) return;  // memory allocation suceeded
+  fprintf(stderr, "Failed to allocate memory for %s.\n", name);
+  exit(EXIT_FAILURE);
+}

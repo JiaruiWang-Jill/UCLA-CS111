@@ -21,5 +21,6 @@ typedef struct ext2_group_desc group_descriptor_t;
 
 /* macros */
 #define BOOT_BLOCK_SIZE 1024
+#define BIT_PER_BYTE 8
 
 #endif /* !LAB3A_H */
