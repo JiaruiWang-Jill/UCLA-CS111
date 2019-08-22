@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stats.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -62,14 +62,8 @@ unsigned long block_offset(__u32 block_index) {
   return _offset(BOOT_BLOCK_SIZE, block_index - 1, block_size);
 }
 
-/* store the time in the format mm/dd/yy hh:mm:ss, GMT
- * 'raw_time' is a 32 bit value representing the number of
- * seconds since January 1st, 1970
- */
-void get_time(time_t raw_time, char *buf) {
-  time_t epoch = raw_time;
-  struct tm ts = *gmtime(&epoch);
-  strftime(buf, 80, "%m/%d/%y %H:%M:%S", &ts);
+void parse_time(time_t time, char *buf) {
+  strftime(buf, 80, "%m/%d/%y %H:%M:%S", gmtime(&time));
 }
 
 /* given location of directory entry block, produce directory entry summary */
@@ -80,7 +74,8 @@ void read_dir_entry(unsigned int parent_inode, unsigned int block_num) {
 
   while (num_bytes < block_size) {
     memset(dir_entry.name, 0, 256);
-    pread(fs_fd, &dir_entry, sizeof(dir_entry), offset + num_bytes);
+    _c(pread(fs_fd, &dir_entry, sizeof(dir_entry), offset + num_bytes),
+       "Failed to read the directory entry");
     if (dir_entry.inode != 0) {  // entry is not empty
       memset(&dir_entry.name[dir_entry.name_len], 0, 256 - dir_entry.name_len);
       printf("DIRENT,%d,%d,%d,%d,%d,'%s'\n",
@@ -96,43 +91,175 @@ void read_dir_entry(unsigned int parent_inode, unsigned int block_num) {
   }
 }
 
-/* for an allocated inode, print its summary */
-void read_inode(unsigned int inode_table_id, unsigned int index,
-                unsigned int inode_num) {
+void analyze_inode(unsigned int inode_table_index, unsigned int index,
+                   unsigned int inode_num);
+
+/**
+ * usage
+ *
+ * prints out the usage of this function. Then exits with EXIT_FAILURE status.
+ */
+void usage();
+
+void analyze_group(__u32 group_index) {
+  char *block_bitmap, *inode_bitmap;
+  group_descriptor_t group_descriptor;
+  __u32 num_inodes_in_group, block_count_in_group;
+  __u32 inode_bitmap_size = b_to_B(super_block.s_inodes_per_group);
+
+  _m(inode_bitmap = (char *)malloc(inode_bitmap_size), "inode bitmap");
+  _m(block_bitmap = (char *)malloc(block_size), "block bitmap");
+  // Initialize the group descriptor for this group
+  _c(pread(fs_fd, &group_descriptor, sizeof(group_descriptor),
+           block_size * descriptor_block_index +
+               group_index * sizeof(group_descriptor)),
+     "Failed to read the group descriptor");
+
+  // Calculate number of block in this group
+  if (group_index == group_count - 1) {
+    block_count_in_group = super_block.s_blocks_count -
+                           super_block.s_blocks_per_group * (group_count - 1);
+    num_inodes_in_group = super_block.s_inodes_count -
+                          super_block.s_inodes_per_group * (group_count - 1);
+  } else {
+    block_count_in_group = super_block.s_blocks_per_group;
+    num_inodes_in_group = super_block.s_inodes_per_group;
+  }
+
+  // Print group summary
+  printf(
+      "GROUP,%d,%d,%d,%d,%d,%d,%d,%d\n",
+      group_index,           // group number (decimal, starting from zero)
+      block_count_in_group,  // total number of blocks in this group (decimal)
+      num_inodes_in_group,   // total number of inodes (decimal)
+      group_descriptor.bg_free_blocks_count,  // number of free blocks (decimal)
+      group_descriptor.bg_free_inodes_count,  // number of free inodes (decimal)
+      // block number of free block bitmap for this group (decimal)
+      group_descriptor.bg_block_bitmap,
+      // block number of free inode bitmap for this group (decimal)
+      group_descriptor.bg_inode_bitmap,
+      // block number of first block of i-nodes in this group (decimal)
+      group_descriptor.bg_inode_table);
+
+  // Read the block bitmap for this group
+  _c(pread(fs_fd, block_bitmap, block_size,
+           block_offset(group_descriptor.bg_block_bitmap)),
+     "Failed to read the block bitmap");
+
+  // Set block_index to the index of the first block in this group
+  __u32 block_index = _offset(super_block.s_first_data_block, group_index,
+                              super_block.s_blocks_per_group);
+  // Scan through the block bitmap bit by bit
+  for (__u32 i = 0; i < block_size; i++) {
+    char byte = block_bitmap[i];
+    for (short j = 0; j < BIT_PER_BYTE; j++) {
+      bool allocated = byte & 1;
+      if (!allocated) printf("BFREE,%d\n", block_index);
+      byte >>= 1;
+      block_index++;
+    }
+  }
+
+  __u32 group_inode_start =
+      _offset(1, group_index, super_block.s_inodes_per_group);
+  __u32 inode_index = group_inode_start;
+  _c(pread(fs_fd, inode_bitmap, inode_bitmap_size,
+           block_offset(group_descriptor.bg_inode_bitmap)),
+     "Failed to read the inode bitmap");
+
+  for (__u32 i = 0; i < inode_bitmap_size; i++) {
+    char byte = inode_bitmap[i];
+    for (int j = 0; j < BIT_PER_BYTE; j++) {
+      bool allocated = byte & 1;
+      if (allocated) {
+        analyze_inode(group_descriptor.bg_inode_table,
+                      inode_index - group_inode_start, inode_index);
+      } else
+        printf("IFREE,%d\n", inode_index);
+      byte >>= 1;
+      inode_index++;
+    }
+  }
+
+  // Free allocated memory
+  free(block_bitmap);
+  free(inode_bitmap);
+};
+
+int main(int argc, char *argv[]) {
+  // Check the number of arguments; should be exactly 1
+  if (argc != 2) {
+    fprintf(stderr, "The program takes exactly 1 argument, %d were given.\n",
+            argc - 1);
+    usage();
+  }
+  // Open the file system image
+  _c(fs_fd = open(argv[1], O_RDONLY),
+     "Failed to open the given file system image file");
+  // Intialize super_block structure
+  _c(pread(fs_fd, &super_block, sizeof(super_block), BOOT_BLOCK_SIZE),
+     "Failed to read the super block");
+  block_size = EXT2_MIN_BLOCK_SIZE << super_block.s_log_block_size;
+  // Print super block summary
+  printf("SUPERBLOCK,%d,%d,%d,%d,%d,%d,%d\n",
+         super_block.s_blocks_count,      // total number of blocks (decimal)
+         super_block.s_inodes_count,      // total number of inodes (decimal)
+         block_size,                      // block size (in bytes, decimal)
+         super_block.s_inode_size,        // i-node size (in bytes, decimal)
+         super_block.s_blocks_per_group,  // blocks per group (decimal)
+         super_block.s_inodes_per_group,  // inodes per group (decimal)
+         super_block.s_first_ino          // first non-reserved inode (decimal)
+  );
+
+  // Calculate number of block groups on the disk
+  group_count =
+      1 + (super_block.s_blocks_count - 1) / super_block.s_blocks_per_group;
+  // Locate the group descriptors
+  if (block_size < 1024) {
+    fprintf(stderr, "Block size can't be less than 1024. Something's wrong.\n");
+    exit(EXIT_FAILURE);
+  }
+  descriptor_block_index = block_size > 1024 ? 1 : 2;
+  // Analyze each block group
+  for (__u32 group_index = 0; group_index < group_count; group_index++)
+    analyze_group(group_index);
+
+  exit(EXIT_SUCCESS);
+}
+
+void analyze_inode(unsigned int inode_table_index, unsigned int index,
+                   unsigned int inode_num) {
   struct ext2_inode inode;
 
-  unsigned long offset = block_offset(inode_table_id) + index * sizeof(inode);
+  unsigned long offset =
+      block_offset(inode_table_index) + index * sizeof(inode);
   _c(pread(fs_fd, &inode, sizeof(inode), offset), "Failed to read inode");
 
   // Check if inode is actually freed
   if (inode.i_mode == 0 || inode.i_links_count == 0) return;
 
   char filetype = '?';
-  if (S_ISLNK(inode.i_mode)) filetype = 's';
-  if (S_ISREG(inode.i_mode)) filetype = 'f';
-  if (S_ISDIR(inode.i_mode)) filetype = 'd';
+  if (S_ISLNK(inode.i_mode)) filetype = 's';  // symlink
+  if (S_ISREG(inode.i_mode)) filetype = 'f';  // regular file
+  if (S_ISDIR(inode.i_mode)) filetype = 'd';  // directory
 
-  unsigned int num_blocks =
+  unsigned int block_count =
       2 * (inode.i_blocks / (2 << super_block.s_log_block_size));
 
-  printf("INODE,%d,%c,%o,%d,%d,%d,",
+  char ctime[20], mtime[20], atime[20];
+  parse_time(inode.i_ctime, ctime);  // creation time
+  parse_time(inode.i_mtime, mtime);  // modification time
+  parse_time(inode.i_atime, atime);  // access time
+  printf("INODE,%d,%c,%o,%d,%d,%d,%s,%s,%s,%d,%d",
          inode_num,             // inode number
          filetype,              // filetype
          inode.i_mode & 0xFFF,  // mode, low order 12-bits
          inode.i_uid,           // owner
          inode.i_gid,           // group
-         inode.i_links_count    // link count
-  );
-
-  char ctime[20], mtime[20], atime[20];
-  get_time(inode.i_ctime, ctime);  // creation time
-  get_time(inode.i_mtime, mtime);  // modification time
-  get_time(inode.i_atime, atime);  // access time
-  printf("%s,%s,%s,", ctime, mtime, atime);
-
-  printf("%d,%d",
+         inode.i_links_count,   // link count
+         ctime, mtime, atime,
          inode.i_size,  // file size
-         num_blocks     // number of blocks
+         block_count    // number of blocks
   );
 
   unsigned int i;
@@ -285,139 +412,6 @@ void read_inode(unsigned int inode_table_id, unsigned int index,
     }
     free(indir2_block_ptrs);
   }
-}
-
-/**
- * usage
- *
- * prints out the usage of this function. Then exits with EXIT_FAILURE status.
- */
-void usage();
-
-void analyze_group(__u32 group_index) {
-  char *block_bitmap, *inode_bitmap;
-  group_descriptor_t group_descriptor;
-  __u32 num_inodes_in_group, num_blocks_in_group;
-  __u32 inode_bitmap_size = b_to_B(super_block.s_inodes_per_group);
-
-  _m(inode_bitmap = (char *)malloc(inode_bitmap_size), "inode bitmap");
-  _m(block_bitmap = (char *)malloc(block_size), "block bitmap");
-  // Initialize the group descriptor for this group
-  _c(pread(fs_fd, &group_descriptor, sizeof(group_descriptor),
-           block_size * descriptor_block_index +
-               group_index * sizeof(group_descriptor)),
-     "Failed to read the group descriptor");
-
-  // Calculate number of block in this group
-  if (group_index == group_count - 1) {
-    num_blocks_in_group = super_block.s_blocks_count -
-                          super_block.s_blocks_per_group * (group_count - 1);
-    num_inodes_in_group = super_block.s_inodes_count -
-                          super_block.s_inodes_per_group * (group_count - 1);
-  } else {
-    num_blocks_in_group = super_block.s_blocks_per_group;
-    num_inodes_in_group = super_block.s_inodes_per_group;
-  }
-
-  // Print group summary
-  printf(
-      "GROUP,%d,%d,%d,%d,%d,%d,%d,%d\n",
-      group_index,          // group number (decimal, starting from zero)
-      num_blocks_in_group,  // total number of blocks in this group (decimal)
-      num_inodes_in_group,  // total number of inodes (decimal)
-      group_descriptor.bg_free_blocks_count,  // number of free blocks (decimal)
-      group_descriptor.bg_free_inodes_count,  // number of free inodes (decimal)
-      // block number of free block bitmap for this group (decimal)
-      group_descriptor.bg_block_bitmap,
-      // block number of free inode bitmap for this group (decimal)
-      group_descriptor.bg_inode_bitmap,
-      // block number of first block of i-nodes in this group (decimal)
-      group_descriptor.bg_inode_table);
-
-  // Read the block bitmap for this group
-  _c(pread(fs_fd, block_bitmap, block_size,
-           block_offset(group_descriptor.bg_block_bitmap)),
-     "Failed to read the block bitmap");
-
-  // Set block_index to the index of the first block in this group
-  __u32 block_index = _offset(super_block.s_first_data_block, group_index,
-                              super_block.s_blocks_per_group);
-  // Scan through the block bitmap bit by bit
-  for (__u32 i = 0; i < block_size; i++) {
-    char byte = block_bitmap[i];
-    for (short j = 0; j < BIT_PER_BYTE; j++) {
-      bool allocated = byte & 1;
-      if (!allocated) printf("BFREE,%d\n", block_index);
-      byte >>= 1;
-      block_index++;
-    }
-  }
-
-  __u32 group_inode_start =
-      _offset(1, group_index, super_block.s_inodes_per_group);
-  __u32 inode_index = group_inode_start;
-  _c(pread(fs_fd, inode_bitmap, inode_bitmap_size,
-           block_offset(group_descriptor.bg_inode_bitmap)),
-     "Failed to read the inode bitmap");
-
-  for (__u32 i = 0; i < inode_bitmap_size; i++) {
-    char byte = inode_bitmap[i];
-    for (int j = 0; j < BIT_PER_BYTE; j++) {
-      bool allocated = byte & 1;
-      if (allocated) {
-        read_inode(group_descriptor.bg_inode_table,
-                   inode_index - group_inode_start, inode_index);
-      } else
-        printf("IFREE,%d\n", inode_index);
-      byte >>= 1;
-      inode_index++;
-    }
-  }
-
-  // Free allocated memory
-  free(block_bitmap);
-  free(inode_bitmap);
-};
-
-int main(int argc, char *argv[]) {
-  // Check the number of arguments; should be exactly 1
-  if (argc != 2) {
-    fprintf(stderr, "The program takes exactly 1 argument, %d were given.\n",
-            argc - 1);
-    usage();
-  }
-  // Open the file system image
-  _c(fs_fd = open(argv[1], O_RDONLY),
-     "Failed to open the given file system image file");
-  // Intialize super_block structure
-  _c(pread(fs_fd, &super_block, sizeof(super_block), BOOT_BLOCK_SIZE),
-     "Failed to read the super block");
-  block_size = EXT2_MIN_BLOCK_SIZE << super_block.s_log_block_size;
-  // Print super block summary
-  printf("SUPERBLOCK,%d,%d,%d,%d,%d,%d,%d\n",
-         super_block.s_blocks_count,      // total number of blocks (decimal)
-         super_block.s_inodes_count,      // total number of inodes (decimal)
-         block_size,                      // block size (in bytes, decimal)
-         super_block.s_inode_size,        // i-node size (in bytes, decimal)
-         super_block.s_blocks_per_group,  // blocks per group (decimal)
-         super_block.s_inodes_per_group,  // inodes per group (decimal)
-         super_block.s_first_ino          // first non-reserved inode (decimal)
-  );
-
-  // Calculate number of block groups on the disk
-  group_count =
-      1 + (super_block.s_blocks_count - 1) / super_block.s_blocks_per_group;
-  // Locate the group descriptors
-  if (block_size < 1024) {
-    fprintf(stderr, "Block size can't be less than 1024. Something's wrong.\n");
-    exit(EXIT_FAILURE);
-  }
-  descriptor_block_index = block_size > 1024 ? 1 : 2;
-  // Analyze each block group
-  for (__u32 group_index = 0; group_index < group_count; group_index++)
-    analyze_group(group_index);
-
-  exit(EXIT_SUCCESS);
 }
 
 void usage() {
