@@ -2,7 +2,7 @@
 #EMAIL: zenn@ucla.edu
 #ID: 005181694
 
-.PHONY: default dist clean sanity trivial
+.PHONY: build dist clean sanity trivial
 
 build: lab3a.c lab3a.h ext2_fs.h
 	gcc -o lab3a -g -Wall -Wextra lab3a.c

@@ -18,9 +18,12 @@
 /* typedefs */
 typedef struct ext2_super_block superblock_t;
 typedef struct ext2_group_desc group_descriptor_t;
+typedef struct ext2_inode inode_t;
+typedef struct ext2_dir_entry dir_entry_t;
 
 /* macros */
 #define BOOT_BLOCK_SIZE 1024
 #define BIT_PER_BYTE 8
+#define TIME_STRING_SIZE 80
 
 #endif /* !LAB3A_H */
